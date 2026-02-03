@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<SwitchoverBlueGreenDeploymentResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+  <SwitchoverBlueGreenDeploymentResult>
+    <BlueGreenDeployment>
+      <BlueGreenDeploymentIdentifier>{{.Identifier}}</BlueGreenDeploymentIdentifier>
+      <BlueGreenDeploymentName>{{.Name}}</BlueGreenDeploymentName>
+      <Source>{{.SourceClusterARN}}</Source>
+      <Target>{{.TargetClusterARN}}</Target>
+      <Status>{{.Status}}</Status>
+      <StatusDetails>{{.StatusDetails}}</StatusDetails>
+    </BlueGreenDeployment>
+  </SwitchoverBlueGreenDeploymentResult>
+  <ResponseMetadata>
+    <RequestId>mock-request-id</RequestId>
+  </ResponseMetadata>
+</SwitchoverBlueGreenDeploymentResponse>

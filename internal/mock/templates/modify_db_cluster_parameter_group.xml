@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ModifyDBClusterParameterGroupResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+  <ModifyDBClusterParameterGroupResult>
+    <DBClusterParameterGroupName>{{.Name}}</DBClusterParameterGroupName>
+  </ModifyDBClusterParameterGroupResult>
+  <ResponseMetadata>
+    <RequestId>mock-request-id</RequestId>
+  </ResponseMetadata>
+</ModifyDBClusterParameterGroupResponse>

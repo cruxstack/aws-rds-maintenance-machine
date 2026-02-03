@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DescribeOrderableDBInstanceOptionsResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+  <DescribeOrderableDBInstanceOptionsResult>
+    <OrderableDBInstanceOptions>
+{{- range .InstanceTypes}}
+      <OrderableDBInstanceOption>
+        <DBInstanceClass>{{.InstanceClass}}</DBInstanceClass>
+        <Engine>{{$.Engine}}</Engine>
+        <EngineVersion>{{$.EngineVersion}}</EngineVersion>
+        <StorageType>aurora</StorageType>
+        <SupportedEngineModes>
+          <member>provisioned</member>
+        </SupportedEngineModes>
+        <AvailabilityZones>
+{{- range .AvailabilityZones}}
+          <AvailabilityZone>
+            <Name>{{.}}</Name>
+          </AvailabilityZone>
+{{- end}}
+        </AvailabilityZones>
+      </OrderableDBInstanceOption>
+{{- end}}
+    </OrderableDBInstanceOptions>
+  </DescribeOrderableDBInstanceOptionsResult>
+  <ResponseMetadata>
+    <RequestId>mock-request-id</RequestId>
+  </ResponseMetadata>
+</DescribeOrderableDBInstanceOptionsResponse>

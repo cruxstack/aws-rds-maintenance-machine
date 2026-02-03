@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DescribeDBEngineVersionsResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+  <DescribeDBEngineVersionsResult>
+    <DBEngineVersions>
+      <DBEngineVersion>
+        <Engine>{{.Engine}}</Engine>
+        <EngineVersion>{{.EngineVersion}}</EngineVersion>
+        <DBParameterGroupFamily>{{.ParameterGroupFamily}}</DBParameterGroupFamily>
+        <ValidUpgradeTarget>
+{{- range .UpgradeTargets}}
+          <UpgradeTarget>
+            <Engine>{{.Engine}}</Engine>
+            <EngineVersion>{{.Version}}</EngineVersion>
+            <Description>{{.Description}}</Description>
+            <IsMajorVersionUpgrade>{{.IsMajor}}</IsMajorVersionUpgrade>
+            <SupportedEngineModes>
+              <member>provisioned</member>
+            </SupportedEngineModes>
+          </UpgradeTarget>
+{{- end}}
+        </ValidUpgradeTarget>
+      </DBEngineVersion>
+    </DBEngineVersions>
+  </DescribeDBEngineVersionsResult>
+  <ResponseMetadata>
+    <RequestId>mock-request-id</RequestId>
+  </ResponseMetadata>
+</DescribeDBEngineVersionsResponse>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ListTagsForResourceResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+  <ListTagsForResourceResult>
+    <TagList>
+{{- range .Tags}}
+      <Tag>
+        <Key>{{.Key}}</Key>
+        <Value>{{.Value}}</Value>
+      </Tag>
+{{- end}}
+    </TagList>
+  </ListTagsForResourceResult>
+  <ResponseMetadata>
+    <RequestId>mock-request-id</RequestId>
+  </ResponseMetadata>
+</ListTagsForResourceResponse>

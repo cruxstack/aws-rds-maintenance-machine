@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DescribeDBProxyTargetGroupsResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+  <DescribeDBProxyTargetGroupsResult>
+    <TargetGroups>
+{{- range .TargetGroups}}
+      <member>
+        <TargetGroupName>{{.TargetGroupName}}</TargetGroupName>
+        <DBProxyName>{{.DBProxyName}}</DBProxyName>
+        <Status>{{.Status}}</Status>
+        <IsDefault>{{.IsDefault}}</IsDefault>
+      </member>
+{{- end}}
+    </TargetGroups>
+  </DescribeDBProxyTargetGroupsResult>
+  <ResponseMetadata>
+    <RequestId>mock-request-id</RequestId>
+  </ResponseMetadata>
+</DescribeDBProxyTargetGroupsResponse>

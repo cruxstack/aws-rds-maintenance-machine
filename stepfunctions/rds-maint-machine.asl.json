@@ -1,0 +1,373 @@
+{
+  "Comment": "RDS Maintenance Machine - AWS Step Functions Orchestration for RDS cluster maintenance operations",
+  "StartAt": "ValidateInput",
+  "States": {
+    "ValidateInput": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.operation_id",
+          "IsPresent": true,
+          "Next": "GetOperationStatus"
+        }
+      ],
+      "Default": "CreateOperation"
+    },
+
+    "CreateOperation": {
+      "Type": "Task",
+      "Resource": "${LambdaArn}",
+      "Parameters": {
+        "action": "create",
+        "params.$": "$.params"
+      },
+      "ResultPath": "$.create_result",
+      "Next": "ExtractOperationId",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "OperationFailed"
+        }
+      ]
+    },
+
+    "ExtractOperationId": {
+      "Type": "Pass",
+      "Parameters": {
+        "operation_id.$": "$.create_result.operation_id",
+        "params.$": "$.params"
+      },
+      "Next": "StartOperation"
+    },
+
+    "StartOperation": {
+      "Type": "Task",
+      "Resource": "${LambdaArn}",
+      "Parameters": {
+        "action": "start",
+        "operation_id.$": "$.operation_id"
+      },
+      "ResultPath": "$.start_result",
+      "Next": "ExecuteStep",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "OperationFailed"
+        }
+      ]
+    },
+
+    "GetOperationStatus": {
+      "Type": "Task",
+      "Resource": "${LambdaArn}",
+      "Parameters": {
+        "action": "status",
+        "operation_id.$": "$.operation_id"
+      },
+      "ResultPath": "$.status_result",
+      "Next": "CheckExistingOperationState",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "OperationFailed"
+        }
+      ]
+    },
+
+    "CheckExistingOperationState": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.status_result.operation_state",
+          "StringEquals": "completed",
+          "Next": "OperationSucceeded"
+        },
+        {
+          "Variable": "$.status_result.operation_state",
+          "StringEquals": "failed",
+          "Next": "OperationFailed"
+        },
+        {
+          "Variable": "$.status_result.operation_state",
+          "StringEquals": "rolled_back",
+          "Next": "OperationRolledBack"
+        },
+        {
+          "Variable": "$.status_result.operation_state",
+          "StringEquals": "paused",
+          "Next": "WaitForIntervention"
+        },
+        {
+          "Variable": "$.status_result.operation_state",
+          "StringEquals": "created",
+          "Next": "StartOperation"
+        }
+      ],
+      "Default": "ExecuteStep"
+    },
+
+    "ExecuteStep": {
+      "Type": "Task",
+      "Resource": "${LambdaArn}",
+      "Parameters": {
+        "action": "step",
+        "operation_id.$": "$.operation_id"
+      },
+      "ResultPath": "$.step_result",
+      "Next": "CheckStepResult",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "OperationFailed"
+        }
+      ]
+    },
+
+    "CheckStepResult": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.step_result.completed",
+          "BooleanEquals": true,
+          "Next": "OperationSucceeded"
+        },
+        {
+          "Variable": "$.step_result.failed",
+          "BooleanEquals": true,
+          "Next": "CheckForIntervention"
+        },
+        {
+          "Variable": "$.step_result.needs_intervention",
+          "BooleanEquals": true,
+          "Next": "WaitForIntervention"
+        },
+        {
+          "Variable": "$.step_result.needs_wait",
+          "BooleanEquals": true,
+          "Next": "WaitBeforePoll"
+        },
+        {
+          "Variable": "$.step_result.continue",
+          "BooleanEquals": true,
+          "Next": "ExecuteStep"
+        }
+      ],
+      "Default": "ExecuteStep"
+    },
+
+    "CheckForIntervention": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.step_result.needs_intervention",
+          "BooleanEquals": true,
+          "Next": "WaitForIntervention"
+        }
+      ],
+      "Default": "OperationFailed"
+    },
+
+    "WaitBeforePoll": {
+      "Type": "Wait",
+      "Seconds": 30,
+      "Next": "PollWaitCondition"
+    },
+
+    "PollWaitCondition": {
+      "Type": "Task",
+      "Resource": "${LambdaArn}",
+      "Parameters": {
+        "action": "poll",
+        "operation_id.$": "$.operation_id"
+      },
+      "ResultPath": "$.poll_result",
+      "Next": "CheckPollResult",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "OperationFailed"
+        }
+      ]
+    },
+
+    "CheckPollResult": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.poll_result.needs_intervention",
+          "BooleanEquals": true,
+          "Next": "WaitForIntervention"
+        },
+        {
+          "Variable": "$.poll_result.continue",
+          "BooleanEquals": true,
+          "Next": "ExecuteStep"
+        },
+        {
+          "And": [
+            {
+              "Variable": "$.poll_result.ready",
+              "BooleanEquals": false
+            },
+            {
+              "Variable": "$.poll_result.error",
+              "IsPresent": false
+            }
+          ],
+          "Next": "WaitBeforePoll"
+        },
+        {
+          "Variable": "$.poll_result.ready",
+          "BooleanEquals": true,
+          "Next": "ExecuteStep"
+        }
+      ],
+      "Default": "WaitBeforePoll"
+    },
+
+    "WaitForIntervention": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::events:putEvents.waitForTaskToken",
+      "Parameters": {
+        "Entries": [
+          {
+            "Source": "rds-maint-machine",
+            "DetailType": "InterventionRequired",
+            "Detail": {
+              "operation_id.$": "$.operation_id",
+              "task_token.$": "$$.Task.Token",
+              "pause_reason.$": "$.step_result.pause_reason",
+              "step_name.$": "$.step_result.step_name",
+              "step_index.$": "$.step_result.step_index"
+            }
+          }
+        ]
+      },
+      "ResultPath": "$.intervention_response",
+      "Next": "ProcessInterventionResponse",
+      "HeartbeatSeconds": 86400,
+      "Catch": [
+        {
+          "ErrorEquals": ["States.Timeout", "States.HeartbeatTimeout"],
+          "ResultPath": "$.error",
+          "Next": "InterventionTimeout"
+        }
+      ]
+    },
+
+    "ProcessInterventionResponse": {
+      "Type": "Task",
+      "Resource": "${LambdaArn}",
+      "Parameters": {
+        "action": "resume",
+        "operation_id.$": "$.operation_id",
+        "params.$": "$.intervention_response"
+      },
+      "ResultPath": "$.resume_result",
+      "Next": "CheckResumeAction",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "OperationFailed"
+        }
+      ]
+    },
+
+    "CheckResumeAction": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.intervention_response.action",
+          "StringEquals": "abort",
+          "Next": "OperationAborted"
+        },
+        {
+          "Variable": "$.intervention_response.action",
+          "StringEquals": "rollback",
+          "Next": "WaitForRollback"
+        },
+        {
+          "Variable": "$.intervention_response.action",
+          "StringEquals": "mark_complete",
+          "Next": "OperationSucceeded"
+        }
+      ],
+      "Default": "ExecuteStep"
+    },
+
+    "WaitForRollback": {
+      "Type": "Wait",
+      "Seconds": 10,
+      "Next": "CheckRollbackStatus"
+    },
+
+    "CheckRollbackStatus": {
+      "Type": "Task",
+      "Resource": "${LambdaArn}",
+      "Parameters": {
+        "action": "status",
+        "operation_id.$": "$.operation_id"
+      },
+      "ResultPath": "$.rollback_status",
+      "Next": "IsRollbackComplete",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "OperationFailed"
+        }
+      ]
+    },
+
+    "IsRollbackComplete": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.rollback_status.operation_state",
+          "StringEquals": "rolled_back",
+          "Next": "OperationRolledBack"
+        },
+        {
+          "Variable": "$.rollback_status.operation_state",
+          "StringEquals": "rolling_back",
+          "Next": "WaitForRollback"
+        }
+      ],
+      "Default": "OperationFailed"
+    },
+
+    "InterventionTimeout": {
+      "Type": "Fail",
+      "Error": "InterventionTimeout",
+      "Cause": "No response received for intervention request within timeout period"
+    },
+
+    "OperationSucceeded": {
+      "Type": "Succeed"
+    },
+
+    "OperationFailed": {
+      "Type": "Fail",
+      "Error": "OperationFailed",
+      "Cause.$": "States.Format('Operation failed: {}', $.error.Cause)"
+    },
+
+    "OperationAborted": {
+      "Type": "Fail",
+      "Error": "OperationAborted",
+      "Cause": "Operation was aborted by operator"
+    },
+
+    "OperationRolledBack": {
+      "Type": "Fail",
+      "Error": "OperationRolledBack",
+      "Cause": "Operation was rolled back"
+    }
+  }
+}

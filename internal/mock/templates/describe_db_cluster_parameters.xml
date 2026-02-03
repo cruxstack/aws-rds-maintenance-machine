@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DescribeDBClusterParametersResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+  <DescribeDBClusterParametersResult>
+    <Parameters>
+    </Parameters>
+  </DescribeDBClusterParametersResult>
+  <ResponseMetadata>
+    <RequestId>mock-request-id</RequestId>
+  </ResponseMetadata>
+</DescribeDBClusterParametersResponse>

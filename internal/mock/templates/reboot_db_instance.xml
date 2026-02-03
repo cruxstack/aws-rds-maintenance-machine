@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<RebootDBInstanceResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+  <RebootDBInstanceResult>
+    <DBInstance>
+      <DBInstanceIdentifier>{{.ID}}</DBInstanceIdentifier>
+      <DBInstanceClass>{{.InstanceType}}</DBInstanceClass>
+      <DBInstanceStatus>rebooting</DBInstanceStatus>
+      <DBClusterIdentifier>{{.ClusterID}}</DBClusterIdentifier>
+    </DBInstance>
+  </RebootDBInstanceResult>
+  <ResponseMetadata>
+    <RequestId>mock-request-id</RequestId>
+  </ResponseMetadata>
+</RebootDBInstanceResponse>

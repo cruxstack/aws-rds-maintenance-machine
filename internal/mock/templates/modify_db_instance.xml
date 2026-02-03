@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ModifyDBInstanceResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+  <ModifyDBInstanceResult>
+    <DBInstance>
+      <DBInstanceIdentifier>{{.ID}}</DBInstanceIdentifier>
+      <DBInstanceClass>{{.InstanceType}}</DBInstanceClass>
+      <DBInstanceStatus>{{.Status}}</DBInstanceStatus>
+      <DBInstanceArn>{{.ARN}}</DBInstanceArn>
+    </DBInstance>
+  </ModifyDBInstanceResult>
+  <ResponseMetadata>
+    <RequestId>mock-request-id</RequestId>
+  </ResponseMetadata>
+</ModifyDBInstanceResponse>

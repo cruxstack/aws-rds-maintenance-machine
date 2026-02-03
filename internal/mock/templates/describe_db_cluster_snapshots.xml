@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DescribeDBClusterSnapshotsResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+  <DescribeDBClusterSnapshotsResult>
+    <DBClusterSnapshots>
+{{- range .Snapshots}}
+      <DBClusterSnapshot>
+        <DBClusterSnapshotIdentifier>{{.ID}}</DBClusterSnapshotIdentifier>
+        <DBClusterIdentifier>{{.ClusterID}}</DBClusterIdentifier>
+        <Status>{{.Status}}</Status>
+        <Engine>{{.Engine}}</Engine>
+        <EngineVersion>{{.EngineVersion}}</EngineVersion>
+      </DBClusterSnapshot>
+{{- end}}
+    </DBClusterSnapshots>
+  </DescribeDBClusterSnapshotsResult>
+  <ResponseMetadata>
+    <RequestId>mock-request-id</RequestId>
+  </ResponseMetadata>
+</DescribeDBClusterSnapshotsResponse>

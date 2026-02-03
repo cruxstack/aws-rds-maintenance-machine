@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ErrorResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+  <Error>
+    <Type>Sender</Type>
+    <Code>{{.Code}}</Code>
+    <Message>{{.Message}}</Message>
+  </Error>
+  <RequestId>mock-request-id</RequestId>
+</ErrorResponse>

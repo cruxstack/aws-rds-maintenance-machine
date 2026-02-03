@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<RegisterDBProxyTargetsResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+  <RegisterDBProxyTargetsResult>
+    <DBProxyTargets>
+{{- range .Targets}}
+      <member>
+        <RdsResourceId>{{.RDSResourceID}}</RdsResourceId>
+        <Type>{{.Type}}</Type>
+        <Endpoint>{{.Endpoint}}</Endpoint>
+        <Port>{{.Port}}</Port>
+        <TrackedClusterId>{{if eq .Type "TRACKED_CLUSTER"}}{{.RDSResourceID}}{{end}}</TrackedClusterId>
+        <TargetHealth>
+          <State>{{.TargetHealthState}}</State>
+        </TargetHealth>
+      </member>
+{{- end}}
+    </DBProxyTargets>
+  </RegisterDBProxyTargetsResult>
+  <ResponseMetadata>
+    <RequestId>mock-request-id</RequestId>
+  </ResponseMetadata>
+</RegisterDBProxyTargetsResponse>
