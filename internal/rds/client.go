@@ -415,7 +415,7 @@ func (c *Client) WaitForInstanceAvailable(ctx context.Context, instanceID string
 }
 
 // IsInstanceAvailable checks if an instance is currently in the "available" state.
-// This is a single-check version used for Step Functions polling pattern.
+// This is a single-check version that returns immediately without blocking.
 func (c *Client) IsInstanceAvailable(ctx context.Context, instanceID string) (bool, error) {
 	out, err := c.rds.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{
 		DBInstanceIdentifier: aws.String(instanceID),
@@ -444,7 +444,7 @@ func (c *Client) WaitForInstanceDeleted(ctx context.Context, instanceID string, 
 }
 
 // IsInstanceDeleted checks if an instance has been deleted (no longer exists).
-// This is a single-check version used for Step Functions polling pattern.
+// This is a single-check version that returns immediately without blocking.
 func (c *Client) IsInstanceDeleted(ctx context.Context, instanceID string) (bool, error) {
 	_, err := c.rds.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{
 		DBInstanceIdentifier: aws.String(instanceID),
@@ -470,7 +470,7 @@ func (c *Client) WaitForSnapshotAvailable(ctx context.Context, snapshotID string
 }
 
 // IsSnapshotAvailable checks if a snapshot is currently in the "available" state.
-// This is a single-check version used for Step Functions polling pattern.
+// This is a single-check version that returns immediately without blocking.
 func (c *Client) IsSnapshotAvailable(ctx context.Context, snapshotID string) (bool, error) {
 	out, err := c.rds.DescribeDBClusterSnapshots(ctx, &rds.DescribeDBClusterSnapshotsInput{
 		DBClusterSnapshotIdentifier: aws.String(snapshotID),

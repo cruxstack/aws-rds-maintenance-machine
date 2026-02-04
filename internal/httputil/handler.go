@@ -42,7 +42,6 @@ func (h *RequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req := app.Request{
-		Type:    app.RequestTypeHTTP,
 		Method:  r.Method,
 		Path:    r.URL.Path,
 		Headers: headers,

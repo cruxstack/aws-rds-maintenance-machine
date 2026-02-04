@@ -4,9 +4,6 @@
 
 const mockEndpoint = 'http://localhost:9080';
 
-// Track if Step Functions demo has been initialized
-let sfDemoInitialized = false;
-
 // Tab switching
 function switchTab(tab) {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -16,12 +13,6 @@ function switchTab(tab) {
     
     if (tab === 'demo') {
         loadMockState();
-    } else if (tab === 'stepfn') {
-        // Initialize Step Functions demo on first visit
-        if (!sfDemoInitialized && typeof initStepFunctionDemo === 'function') {
-            initStepFunctionDemo();
-            sfDemoInitialized = true;
-        }
     }
 }
 

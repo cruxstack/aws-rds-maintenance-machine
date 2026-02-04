@@ -28,12 +28,6 @@ If you need to expose the server, set `APP_ADMIN_TOKEN` and use the
 
 ## Other Entry Points
 
-### cmd/lambda
-
-The Lambda entry point (`cmd/lambda/`) can be used with API Gateway, but this
-has not been tested. It is also used as the handler for AWS Step Functions
-orchestration, which is experimental and disabled by default.
-
 ### cmd/demo
 
 Demo mode (`cmd/demo/`) runs a mock RDS API server for testing the UI and

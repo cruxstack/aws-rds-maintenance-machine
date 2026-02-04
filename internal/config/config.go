@@ -52,34 +52,30 @@ type Config struct {
 	// Demo mode settings
 	DemoMode     bool
 	MockEndpoint string // URL of mock RDS server for demo mode
-
-	// Experimental features
-	ExperimentalStepFnEnabled bool // Enable experimental Step Functions support (disabled by default)
 }
 
 // NewConfig creates a new Config from environment variables.
 func NewConfig() (*Config, error) {
 	cfg := &Config{
-		Port:                      getEnv("APP_PORT", "3000"),
-		BasePath:                  getEnv("APP_BASE_PATH", ""),
-		AWSRegion:                 getEnv("AWS_REGION", "us-east-1"),
-		AWSProfile:                getEnv("AWS_PROFILE", ""),
-		RDSEndpoint:               getEnv("RDS_ENDPOINT", ""),
-		SlackEnabled:              getEnvBool("APP_SLACK_ENABLED", false),
-		SlackToken:                getEnv("APP_SLACK_TOKEN", ""),
-		SlackChannel:              getEnv("APP_SLACK_CHANNEL", ""),
-		AdminToken:                getEnv("APP_ADMIN_TOKEN", ""),
-		DebugEnabled:              getEnvBool("APP_DEBUG_ENABLED", false),
-		TLSEnabled:                getEnvBool("APP_TLS_ENABLED", false),
-		TLSCertPath:               getEnv("APP_TLS_CERT_PATH", ""),
-		TLSKeyPath:                getEnv("APP_TLS_KEY_PATH", ""),
-		DefaultWaitTimeout:        getEnvInt("APP_DEFAULT_WAIT_TIMEOUT", 2700), // 45 minutes
-		DefaultPollInterval:       getEnvInt("APP_DEFAULT_POLL_INTERVAL", 30),  // 30 seconds
-		DataDir:                   getEnv("APP_DATA_DIR", "./data"),
-		AutoResume:                getEnvBool("APP_AUTO_RESUME", true), // default to auto-resume
-		DemoMode:                  getEnvBool("APP_DEMO_MODE", false),
-		MockEndpoint:              getEnv("APP_MOCK_ENDPOINT", ""),
-		ExperimentalStepFnEnabled: getEnvBool("APP_EXPERIMENTAL_STEPFN_ENABLED", false),
+		Port:                getEnv("APP_PORT", "3000"),
+		BasePath:            getEnv("APP_BASE_PATH", ""),
+		AWSRegion:           getEnv("AWS_REGION", "us-east-1"),
+		AWSProfile:          getEnv("AWS_PROFILE", ""),
+		RDSEndpoint:         getEnv("RDS_ENDPOINT", ""),
+		SlackEnabled:        getEnvBool("APP_SLACK_ENABLED", false),
+		SlackToken:          getEnv("APP_SLACK_TOKEN", ""),
+		SlackChannel:        getEnv("APP_SLACK_CHANNEL", ""),
+		AdminToken:          getEnv("APP_ADMIN_TOKEN", ""),
+		DebugEnabled:        getEnvBool("APP_DEBUG_ENABLED", false),
+		TLSEnabled:          getEnvBool("APP_TLS_ENABLED", false),
+		TLSCertPath:         getEnv("APP_TLS_CERT_PATH", ""),
+		TLSKeyPath:          getEnv("APP_TLS_KEY_PATH", ""),
+		DefaultWaitTimeout:  getEnvInt("APP_DEFAULT_WAIT_TIMEOUT", 2700), // 45 minutes
+		DefaultPollInterval: getEnvInt("APP_DEFAULT_POLL_INTERVAL", 30),  // 30 seconds
+		DataDir:             getEnv("APP_DATA_DIR", "./data"),
+		AutoResume:          getEnvBool("APP_AUTO_RESUME", true), // default to auto-resume
+		DemoMode:            getEnvBool("APP_DEMO_MODE", false),
+		MockEndpoint:        getEnv("APP_MOCK_ENDPOINT", ""),
 	}
 
 	if cfg.SlackToken != "" {
@@ -105,24 +101,23 @@ func (c *Config) LoadAWSConfig(ctx context.Context) (aws.Config, error) {
 // Redacted returns a copy of the config with sensitive values redacted.
 func (c *Config) Redacted() map[string]any {
 	return map[string]any{
-		"port":                        c.Port,
-		"base_path":                   c.BasePath,
-		"aws_region":                  c.AWSRegion,
-		"aws_profile":                 c.AWSProfile,
-		"rds_endpoint":                c.RDSEndpoint,
-		"slack_enabled":               c.SlackEnabled,
-		"slack_token":                 redact(c.SlackToken),
-		"slack_channel":               c.SlackChannel,
-		"admin_token":                 redact(c.AdminToken),
-		"debug_enabled":               c.DebugEnabled,
-		"tls_enabled":                 c.TLSEnabled,
-		"default_wait_timeout":        c.DefaultWaitTimeout,
-		"default_poll_interval":       c.DefaultPollInterval,
-		"data_dir":                    c.DataDir,
-		"auto_resume":                 c.AutoResume,
-		"demo_mode":                   c.DemoMode,
-		"mock_endpoint":               c.MockEndpoint,
-		"experimental_stepfn_enabled": c.ExperimentalStepFnEnabled,
+		"port":                  c.Port,
+		"base_path":             c.BasePath,
+		"aws_region":            c.AWSRegion,
+		"aws_profile":           c.AWSProfile,
+		"rds_endpoint":          c.RDSEndpoint,
+		"slack_enabled":         c.SlackEnabled,
+		"slack_token":           redact(c.SlackToken),
+		"slack_channel":         c.SlackChannel,
+		"admin_token":           redact(c.AdminToken),
+		"debug_enabled":         c.DebugEnabled,
+		"tls_enabled":           c.TLSEnabled,
+		"default_wait_timeout":  c.DefaultWaitTimeout,
+		"default_poll_interval": c.DefaultPollInterval,
+		"data_dir":              c.DataDir,
+		"auto_resume":           c.AutoResume,
+		"demo_mode":             c.DemoMode,
+		"mock_endpoint":         c.MockEndpoint,
 	}
 }
 

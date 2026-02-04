@@ -25,7 +25,6 @@ Machine.
 | ------------- | ---------------------------------------- |
 | `cmd/server/` | HTTP server entry point (primary)        |
 | `cmd/demo/`   | Demo mode - includes mock RDS API server |
-| `cmd/lambda/` | AWS Lambda entry point (experimental)    |
 | `cmd/verify/` | Integration test harness for mock server |
 
 ### Core Packages
@@ -165,17 +164,3 @@ When an operation requires human intervention:
 - Persistent errors pause operation for human intervention
 - Server crash: operations auto-resume or pause on restart (configurable)
 - All state changes are persisted before acknowledging to client
-
-## Experimental: Step Functions Mode
-
-An experimental AWS Step Functions deployment mode is available. When enabled
-(`APP_EXPERIMENTAL_STEPFN_ENABLED=true`), the application can be deployed as a
-Lambda function with Step Functions orchestration.
-
-This changes the execution model:
-
-- Each Lambda invocation executes only one step
-- Step Functions handles wait/poll orchestration via state machine
-- No Lambda timeout issues (each invocation is short-lived)
-
-This feature is not production-ready and may change in future releases.

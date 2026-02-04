@@ -27,7 +27,6 @@
         {{if .DemoMode}}
         <div class="tabs">
             <div class="tab active" onclick="switchTab('operations')">Operations</div>
-            <div class="tab" onclick="switchTab('stepfn')">Step Functions</div>
             <div class="tab" onclick="switchTab('demo')">Demo Controls</div>
         </div>
         {{end}}
@@ -144,149 +143,6 @@
         </div>
         
         {{if .DemoMode}}
-        <!-- Step Functions Tab -->
-        <div id="tab-stepfn" class="tab-content">
-            <div class="sf-layout">
-                <!-- Left Panel: Controls and State Details -->
-                <div class="sf-controls-panel">
-                    <!-- Execution Controls -->
-                    <div class="card">
-                        <div class="card-header">
-                            <div>
-                                <span class="card-title">Step Functions Demo</span>
-                                <p class="card-description">Simulate AWS Step Functions execution locally</p>
-                            </div>
-                            <span id="sf-execution-status" class="sf-execution-status">Idle</span>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label>AWS Region</label>
-                            <div class="custom-select" data-select-id="sf-region-select">
-                                <button type="button" class="custom-select-trigger placeholder" aria-haspopup="listbox">
-                                    <span>Loading regions...</span>
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                                </button>
-                                <div class="custom-select-dropdown" role="listbox" id="sf-region-options">
-                                    <div class="custom-select-option" data-value="" role="option">Loading regions...</div>
-                                </div>
-                                <select id="sf-region-select" tabindex="-1" aria-hidden="true">
-                                    <option value="">Loading regions...</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label>Cluster</label>
-                            <div class="custom-select" data-select-id="sf-cluster-select">
-                                <button type="button" class="custom-select-trigger placeholder" aria-haspopup="listbox" disabled>
-                                    <span>Select a region first...</span>
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                                </button>
-                                <div class="custom-select-dropdown" role="listbox" id="sf-cluster-options">
-                                    <div class="custom-select-option" data-value="" role="option">Select a region first...</div>
-                                </div>
-                                <select id="sf-cluster-select" tabindex="-1" aria-hidden="true" disabled>
-                                    <option value="">Select a region first...</option>
-                                </select>
-                            </div>
-                            <p id="sf-cluster-loading" class="card-description" style="display: none;">Loading clusters...</p>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label>Operation Type</label>
-                            <div class="custom-select" data-select-id="sf-operation-type">
-                                <button type="button" class="custom-select-trigger placeholder" aria-haspopup="listbox" disabled>
-                                    <span>Select a cluster first...</span>
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                                </button>
-                                <div class="custom-select-dropdown" role="listbox">
-                                    <div class="custom-select-option" data-value="" role="option">Select operation...</div>
-                                    <div class="custom-select-option" data-value="engine_upgrade" role="option">Engine Upgrade</div>
-                                    <div class="custom-select-option" data-value="instance_type_change" role="option">Instance Type Change</div>
-                                    <div class="custom-select-option" data-value="instance_cycle" role="option">Instance Cycle (Reboot)</div>
-                                </div>
-                                <select id="sf-operation-type" tabindex="-1" aria-hidden="true" disabled>
-                                    <option value="">Select operation...</option>
-                                    <option value="engine_upgrade">Engine Upgrade</option>
-                                    <option value="instance_type_change">Instance Type Change</option>
-                                    <option value="instance_cycle">Instance Cycle (Reboot)</option>
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <div id="sf-params-container"></div>
-                        
-                        <div class="separator"></div>
-                        
-                        <div class="sf-execution-controls">
-                            <button id="sf-run-btn" class="btn-success">Run</button>
-                            <button id="sf-step-btn" class="btn-primary" disabled>Step</button>
-                            <button id="sf-pause-btn" class="btn-warning" disabled>Pause</button>
-                            <button id="sf-reset-btn" class="btn-secondary">Reset</button>
-                        </div>
-                        
-                        <div class="form-group" style="margin-top: 12px;">
-                            <label style="display: flex; justify-content: space-between; align-items: center;">
-                                <span>Manual Step Mode</span>
-                                <label class="toggle">
-                                    <input type="checkbox" id="sf-manual-mode">
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </label>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label>Execution Speed</label>
-                            <div class="slider-container">
-                                <input type="range" id="sf-speed-slider" min="0.5" max="20" step="0.5" value="5">
-                                <span class="slider-value" id="sf-speed-value">5x</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Intervention Panel (hidden by default) -->
-                    <div id="sf-intervention-panel" class="card sf-intervention-panel" style="display: none;">
-                    </div>
-                    
-                    <!-- Current State Details -->
-                    <div class="card">
-                        <div class="card-header">
-                            <span class="card-title">Current State</span>
-                        </div>
-                        <div id="sf-state-details" class="sf-state-details">
-                            <div class="empty-state">No state selected</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Center Panel: State Machine Graph -->
-                <div class="sf-graph-panel">
-                    <div class="card sf-graph-card">
-                        <div class="card-header">
-                            <span class="card-title">State Machine</span>
-                            <span class="card-description">Visual representation of AWS Step Functions workflow</span>
-                        </div>
-                        <div class="sf-graph-scroll">
-                            <div id="sf-graph-container" class="sf-graph-container">
-                                <div class="empty-state">Loading state machine...</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Right Panel: Execution History -->
-                <div class="sf-history-panel">
-                    <div class="card">
-                        <div class="card-header">
-                            <span class="card-title">Execution History</span>
-                        </div>
-                        <div id="sf-history-list" class="sf-history-list">
-                            <div class="empty-state">No execution history</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
         <!-- Demo Controls Tab -->
         <div id="tab-demo" class="tab-content">
             <div class="grid-3" style="margin-bottom: 20px;">
@@ -519,8 +375,6 @@
     <script src="/static/main.js"></script>
     {{if .DemoMode}}
     <script src="/static/demo.js"></script>
-    <script src="/static/stepfn.js"></script>
-    <script src="/static/stepfn-graph.js"></script>
     {{end}}
 </body>
 </html>

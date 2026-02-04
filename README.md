@@ -263,7 +263,6 @@ ______________________________________________________________________
 cmd/
   server/                # http server entry point
   demo/                  # demo mode with mock server
-  lambda/                # aws lambda entry point (experimental)
   verify/                # integration test harness
 internal/
   app/                   # application logic and http routing
@@ -308,20 +307,6 @@ make test              # run all tests
 make test-unit         # run unit tests only
 make test-verify       # run integration tests against mock server
 ```
-
-## Experimental Features
-
-### Step Functions Support
-
-AWS Step Functions deployment is available but experimental and disabled by
-default. To enable:
-
-```bash
-export APP_EXPERIMENTAL_STEPFN_ENABLED=true
-```
-
-This enables the `/api/sf/*` endpoints and Step Function request handling. See
-[docs/architecture.md](docs/architecture.md) for details.
 
 ## License
 

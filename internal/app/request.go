@@ -17,32 +17,12 @@ import (
 	"github.com/mpz/devops/tools/rds-maint-machine/internal/types"
 )
 
-// RequestType identifies the category of incoming request.
-type RequestType string
-
-const (
-	// RequestTypeHTTP represents HTTP requests.
-	RequestTypeHTTP RequestType = "http"
-	// RequestTypeStepFunction represents AWS Step Function events.
-	RequestTypeStepFunction RequestType = "stepfunction"
-)
-
-// Request is a unified request type that abstracts HTTP and Step Function events.
+// Request represents an HTTP request.
 type Request struct {
-	Type    RequestType       `json:"type"`
 	Method  string            `json:"method,omitempty"`
 	Path    string            `json:"path,omitempty"`
 	Headers map[string]string `json:"headers,omitempty"`
 	Body    []byte            `json:"body,omitempty"`
-
-	// StepFunction fields
-	TaskToken string          `json:"task_token,omitempty"`
-	Input     json.RawMessage `json:"input,omitempty"`
-
-	// LocalSimulation indicates this is a local SF simulation (via /api/sf/invoke).
-	// When true, the start action should NOT spawn a background goroutine since
-	// the browser-based SF executor will drive step execution.
-	LocalSimulation bool `json:"-"`
 }
 
 // Response is a unified response type.
@@ -57,32 +37,13 @@ type Response struct {
 func (a *App) HandleRequest(ctx context.Context, req Request) Response {
 	start := time.Now()
 
-	var resp Response
-	switch req.Type {
-	case RequestTypeStepFunction:
-		resp = a.handleStepFunctionRequest(ctx, req)
-	case RequestTypeHTTP:
-		resp = a.handleHTTPRequest(ctx, req)
-	default:
-		resp = errorResponse(400, "unsupported request type")
-	}
+	resp := a.handleHTTPRequest(ctx, req)
 
 	// Log API requests (skip static assets and UI)
-	if req.Type == RequestTypeHTTP && !isStaticPath(req.Path) {
+	if !isStaticPath(req.Path) {
 		a.Logger.Info("request",
 			"method", req.Method,
 			"path", req.Path,
-			"status", resp.StatusCode,
-			"duration_ms", time.Since(start).Milliseconds())
-	} else if req.Type == RequestTypeStepFunction {
-		var input struct {
-			Action      string `json:"action"`
-			OperationID string `json:"operation_id,omitempty"`
-		}
-		_ = json.Unmarshal(req.Input, &input)
-		a.Logger.Info("stepfn_request",
-			"action", input.Action,
-			"operation_id", input.OperationID,
 			"status", resp.StatusCode,
 			"duration_ms", time.Since(start).Milliseconds())
 	}
@@ -125,10 +86,7 @@ func (a *App) handleHTTPRequest(ctx context.Context, req Request) Response {
 		return a.handleStaticJS("main.js")
 	case path == "/static/demo.js" && req.Method == "GET":
 		return a.handleStaticJS("demo.js")
-	case path == "/static/stepfn.js" && req.Method == "GET":
-		return a.handleStaticJS("stepfn.js")
-	case path == "/static/stepfn-graph.js" && req.Method == "GET":
-		return a.handleStaticJS("stepfn-graph.js")
+
 	case path == "/server/status" && req.Method == "GET":
 		return a.handleStatusRequest(req)
 	case path == "/server/config" && req.Method == "GET":
@@ -173,182 +131,10 @@ func (a *App) handleHTTPRequest(ctx context.Context, req Request) Response {
 		return a.handleGetClusterProxies(ctx, req)
 	case path == "/api/config" && req.Method == "GET":
 		return a.handlePublicConfig()
-	case path == "/api/sf/definition" && req.Method == "GET":
-		if !a.Config.ExperimentalStepFnEnabled {
-			return errorResponse(501, "Step Functions support is disabled; set APP_EXPERIMENTAL_STEPFN_ENABLED=true to enable this experimental feature")
-		}
-		return a.handleSFDefinition()
-	case path == "/api/sf/invoke" && req.Method == "POST":
-		if !a.Config.ExperimentalStepFnEnabled {
-			return errorResponse(501, "Step Functions support is disabled; set APP_EXPERIMENTAL_STEPFN_ENABLED=true to enable this experimental feature")
-		}
-		return a.handleSFInvoke(ctx, req)
 	case strings.HasPrefix(path, "/mock/"):
 		return a.handleMockProxy(req)
 	default:
 		return errorResponse(404, "endpoint not found")
-	}
-}
-
-// handleStepFunctionRequest handles Step Function task requests.
-func (a *App) handleStepFunctionRequest(ctx context.Context, req Request) Response {
-	// Check if Step Functions support is enabled
-	if !a.Config.ExperimentalStepFnEnabled {
-		return errorResponse(501, "Step Functions support is disabled; set APP_EXPERIMENTAL_STEPFN_ENABLED=true to enable this experimental feature")
-	}
-
-	// Parse the input
-	var input struct {
-		Action      string          `json:"action"`
-		OperationID string          `json:"operation_id,omitempty"`
-		Params      json.RawMessage `json:"params,omitempty"`
-	}
-	if err := json.Unmarshal(req.Input, &input); err != nil {
-		return errorResponse(400, "invalid step function input")
-	}
-
-	switch input.Action {
-	case "create":
-		var createReq CreateOperationRequest
-		if err := json.Unmarshal(input.Params, &createReq); err != nil {
-			return errorResponse(400, "invalid create params")
-		}
-		op, err := a.CreateOperation(ctx, createReq)
-		if err != nil {
-			return errorResponse(500, err.Error())
-		}
-		return jsonResponse(200, op)
-
-	case "start":
-		var err error
-		if req.LocalSimulation {
-			// Local SF simulation - don't start background goroutine
-			err = a.Engine.StartOperationForStepFn(ctx, input.OperationID)
-		} else {
-			err = a.StartOperation(ctx, input.OperationID)
-		}
-		if err != nil {
-			return errorResponse(500, err.Error())
-		}
-		return jsonResponse(200, map[string]string{"status": "started"})
-
-	case "status":
-		op, err := a.GetOperation(input.OperationID)
-		if err != nil {
-			return errorResponse(404, err.Error())
-		}
-		return jsonResponse(200, op)
-
-	case "resume":
-		var response types.InterventionResponse
-		if err := json.Unmarshal(input.Params, &response); err != nil {
-			return errorResponse(400, "invalid resume params")
-		}
-		if err := a.ResumeOperation(ctx, input.OperationID, response); err != nil {
-			return errorResponse(500, err.Error())
-		}
-		return jsonResponse(200, map[string]string{"status": "resumed"})
-
-	case "pause":
-		var params struct {
-			Reason string `json:"reason"`
-		}
-		if len(input.Params) > 0 {
-			if err := json.Unmarshal(input.Params, &params); err != nil {
-				return errorResponse(400, "invalid pause params")
-			}
-		}
-		if err := a.PauseOperation(ctx, input.OperationID, params.Reason); err != nil {
-			return errorResponse(500, err.Error())
-		}
-		return jsonResponse(200, map[string]string{"status": "paused"})
-
-	case "delete":
-		if err := a.DeleteOperation(ctx, input.OperationID); err != nil {
-			if internalerrors.IsNotFound(err) {
-				return errorResponse(404, err.Error())
-			}
-			if internalerrors.IsCannotDelete(err) {
-				return errorResponse(400, err.Error())
-			}
-			return errorResponse(500, err.Error())
-		}
-		return jsonResponse(200, map[string]string{"status": "deleted"})
-
-	case "update":
-		var params struct {
-			WaitTimeout      int   `json:"wait_timeout"`
-			PauseBeforeSteps []int `json:"pause_before_steps"`
-		}
-		if err := json.Unmarshal(input.Params, &params); err != nil {
-			return errorResponse(400, "invalid update params")
-		}
-		if params.WaitTimeout > 0 {
-			if err := a.UpdateOperationTimeout(ctx, input.OperationID, params.WaitTimeout); err != nil {
-				return errorResponse(500, err.Error())
-			}
-		}
-		if params.PauseBeforeSteps != nil {
-			if err := a.Engine.SetPauseBeforeSteps(ctx, input.OperationID, params.PauseBeforeSteps); err != nil {
-				if internalerrors.IsNotFound(err) {
-					return errorResponse(404, err.Error())
-				}
-				return errorResponse(400, err.Error())
-			}
-		}
-		op, err := a.GetOperation(input.OperationID)
-		if err != nil {
-			return errorResponse(404, err.Error())
-		}
-		return jsonResponse(200, op)
-
-	case "reset":
-		var params struct {
-			StepIndex int `json:"step_index"`
-		}
-		if err := json.Unmarshal(input.Params, &params); err != nil {
-			return errorResponse(400, "invalid reset params")
-		}
-		if err := a.Engine.ResetOperationToStep(ctx, input.OperationID, params.StepIndex); err != nil {
-			if internalerrors.IsNotFound(err) {
-				return errorResponse(404, err.Error())
-			}
-			return errorResponse(400, err.Error())
-		}
-		op, err := a.GetOperation(input.OperationID)
-		if err != nil {
-			return errorResponse(404, err.Error())
-		}
-		return jsonResponse(200, op)
-
-	case "step":
-		// Execute single step for Step Functions integration.
-		// This executes only the current step and returns immediately,
-		// allowing Step Functions to handle wait states and orchestration.
-		result, err := a.Engine.ExecuteCurrentStep(ctx, input.OperationID)
-		if err != nil {
-			if internalerrors.IsNotFound(err) {
-				return errorResponse(404, err.Error())
-			}
-			return errorResponse(400, err.Error())
-		}
-		return jsonResponse(200, result)
-
-	case "poll":
-		// Poll wait condition for Step Functions integration.
-		// Checks if the current step's wait condition is satisfied
-		// without blocking - returns immediately with status.
-		result, err := a.Engine.PollCurrentStep(ctx, input.OperationID)
-		if err != nil {
-			if internalerrors.IsNotFound(err) {
-				return errorResponse(404, err.Error())
-			}
-			return errorResponse(400, err.Error())
-		}
-		return jsonResponse(200, result)
-
-	default:
-		return errorResponse(400, "unsupported action: "+input.Action)
 	}
 }
 
@@ -372,9 +158,8 @@ func (a *App) handleConfigRequest(req Request) Response {
 // This is used by the React UI to determine if demo mode is enabled.
 func (a *App) handlePublicConfig() Response {
 	return jsonResponse(200, map[string]any{
-		"demo_mode":                   a.Config.DemoMode,
-		"base_path":                   a.Config.BasePath,
-		"experimental_stepfn_enabled": a.Config.ExperimentalStepFnEnabled,
+		"demo_mode": a.Config.DemoMode,
+		"base_path": a.Config.BasePath,
 	})
 }
 
@@ -950,33 +735,4 @@ func (a *App) checkAdminAuth(req Request) *Response {
 	}
 
 	return nil
-}
-
-// handleSFDefinition returns the Step Functions state machine definition for local demo.
-func (a *App) handleSFDefinition() Response {
-	data, err := templates.FS.ReadFile("stepfn-definition.json")
-	if err != nil {
-		return errorResponse(500, "failed to load SF definition: "+err.Error())
-	}
-	return Response{
-		StatusCode:  200,
-		ContentType: "application/json",
-		Headers:     map[string]string{"Content-Type": "application/json"},
-		Body:        data,
-	}
-}
-
-// handleSFInvoke handles local Step Functions simulation by invoking actions via HTTP.
-// This wraps the Step Function request handler to allow the browser-based SF executor
-// to call actions (create, start, step, poll, resume, etc.) via HTTP POST.
-func (a *App) handleSFInvoke(ctx context.Context, req Request) Response {
-	// The body should be a Step Function event-like structure
-	// Convert the HTTP request body to a Step Function request.
-	// Mark this as a local simulation so we don't start background step execution.
-	sfReq := Request{
-		Type:            RequestTypeStepFunction,
-		Input:           req.Body,
-		LocalSimulation: true,
-	}
-	return a.handleStepFunctionRequest(ctx, sfReq)
 }

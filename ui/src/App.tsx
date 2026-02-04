@@ -29,9 +29,6 @@ import type {
   ResumeAction,
 } from '@/types';
 
-// Feature flags
-const ENABLE_STEPFN_TAB = false;
-
 function App() {
   const { toasts, removeToast, error: showError, success: showSuccess } = useToast();
 
@@ -290,9 +287,6 @@ function App() {
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="mb-6">
               <TabsTrigger value="operations">Operations</TabsTrigger>
-              {ENABLE_STEPFN_TAB && (
-                <TabsTrigger value="stepfn">Step Functions</TabsTrigger>
-              )}
               <TabsTrigger value="demo">Demo Controls</TabsTrigger>
             </TabsList>
 
@@ -317,14 +311,6 @@ function App() {
                 onError={handleError}
               />
             </TabsContent>
-
-            {ENABLE_STEPFN_TAB && (
-              <TabsContent value="stepfn">
-                <div className="flex items-center justify-center p-12 text-muted-foreground">
-                  Step Functions tab coming soon...
-                </div>
-              </TabsContent>
-            )}
 
             <TabsContent value="demo">
               <DemoControls onError={handleError} onResetAll={handleResetAll} />

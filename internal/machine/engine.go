@@ -388,20 +388,6 @@ func (e *Engine) ResetOperationToStep(ctx context.Context, id string, stepIndex 
 
 // StartOperation starts executing an operation.
 func (e *Engine) StartOperation(ctx context.Context, id string) error {
-	return e.startOperation(ctx, id, false)
-}
-
-// StartOperationForStepFn starts an operation for Step Functions mode.
-// Unlike StartOperation, this does NOT spawn a background goroutine to execute steps.
-// Instead, the caller (Step Functions) is expected to drive execution by calling
-// ExecuteCurrentStep and PollCurrentStep.
-func (e *Engine) StartOperationForStepFn(ctx context.Context, id string) error {
-	return e.startOperation(ctx, id, true)
-}
-
-// startOperation is the internal implementation for starting operations.
-// If sfMode is true, the background step execution goroutine is NOT started.
-func (e *Engine) startOperation(ctx context.Context, id string, sfMode bool) error {
 	e.mu.Lock()
 	op, ok := e.operations[id]
 	if !ok {
@@ -431,11 +417,7 @@ func (e *Engine) startOperation(ctx context.Context, id string, sfMode bool) err
 
 	// Execute steps in background with a new context that won't be canceled
 	// when the HTTP request completes.
-	// In Step Functions mode, skip the background execution - the SF executor
-	// will drive step execution via ExecuteCurrentStep/PollCurrentStep calls.
-	if !sfMode {
-		go e.executeSteps(context.Background(), op)
-	}
+	go e.executeSteps(context.Background(), op)
 
 	return nil
 }

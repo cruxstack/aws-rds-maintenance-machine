@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 	"time"
 
@@ -120,7 +119,6 @@ func TestHandleRequest_HTTPRouting(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := Request{
-				Type:    RequestTypeHTTP,
 				Method:  tt.method,
 				Path:    tt.path,
 				Body:    tt.body,
@@ -183,7 +181,6 @@ func TestHandleRequest_BasePath(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := Request{
-				Type:   RequestTypeHTTP,
 				Method: "GET",
 				Path:   tt.path,
 			}
@@ -194,102 +191,6 @@ func TestHandleRequest_BasePath(t *testing.T) {
 				t.Errorf("got status %d, want %d", resp.StatusCode, tt.wantStatus)
 			}
 		})
-	}
-}
-
-func TestHandleRequest_StepFunction(t *testing.T) {
-	// Create app with Step Functions enabled
-	cfg := &config.Config{
-		AWSRegion:                 "us-east-1",
-		DemoMode:                  true,
-		AdminToken:                "test-admin-token",
-		ExperimentalStepFnEnabled: true, // Enable for testing
-	}
-
-	engine := machine.NewEngine(machine.EngineConfig{
-		Store:               &storage.NullStore{},
-		DefaultRegion:       "us-east-1",
-		DefaultWaitTimeout:  5 * time.Minute,
-		DefaultPollInterval: 1 * time.Second,
-	})
-
-	app := NewWithEngine(cfg, engine, &notifiers.NullNotifier{})
-	ctx := context.Background()
-
-	tests := []struct {
-		name       string
-		input      map[string]any
-		wantStatus int
-	}{
-		{
-			name:       "status action with unknown operation",
-			input:      map[string]any{"action": "status", "operation_id": "unknown"},
-			wantStatus: 404,
-		},
-		{
-			name:       "unknown action returns error",
-			input:      map[string]any{"action": "unknown"},
-			wantStatus: 400,
-		},
-		{
-			name:       "create without params fails",
-			input:      map[string]any{"action": "create"},
-			wantStatus: 400,
-		},
-		{
-			name:       "start unknown operation fails",
-			input:      map[string]any{"action": "start", "operation_id": "unknown"},
-			wantStatus: 500,
-		},
-		{
-			name:       "delete unknown operation fails",
-			input:      map[string]any{"action": "delete", "operation_id": "unknown"},
-			wantStatus: 404,
-		},
-		{
-			name:       "step unknown operation fails",
-			input:      map[string]any{"action": "step", "operation_id": "unknown"},
-			wantStatus: 404,
-		},
-		{
-			name:       "poll unknown operation fails",
-			input:      map[string]any{"action": "poll", "operation_id": "unknown"},
-			wantStatus: 404,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			inputJSON, _ := json.Marshal(tt.input)
-			req := Request{
-				Type:  RequestTypeStepFunction,
-				Input: inputJSON,
-			}
-
-			resp := app.HandleRequest(ctx, req)
-
-			if resp.StatusCode != tt.wantStatus {
-				t.Errorf("got status %d, want %d. Body: %s", resp.StatusCode, tt.wantStatus, string(resp.Body))
-			}
-		})
-	}
-}
-
-func TestHandleRequest_StepFunction_Disabled(t *testing.T) {
-	// Test that Step Functions requests are rejected when disabled
-	app := testApp(t) // Uses default config with StepFn disabled
-	ctx := context.Background()
-
-	inputJSON, _ := json.Marshal(map[string]any{"action": "status", "operation_id": "test"})
-	req := Request{
-		Type:  RequestTypeStepFunction,
-		Input: inputJSON,
-	}
-
-	resp := app.HandleRequest(ctx, req)
-
-	if resp.StatusCode != 501 {
-		t.Errorf("got status %d, want 501 (Not Implemented). Body: %s", resp.StatusCode, string(resp.Body))
 	}
 }
 

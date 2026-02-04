@@ -3,7 +3,7 @@ package templates
 
 import "embed"
 
-// FS contains embedded HTML templates, CSS, JS, SVG, and JSON files.
+// FS contains embedded HTML templates, CSS, JS, and SVG files.
 //
-//go:embed *.html *.css *.js *.svg *.json
+//go:embed *.html *.css *.js *.svg
 var FS embed.FS

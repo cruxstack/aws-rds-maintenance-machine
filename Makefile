@@ -21,10 +21,6 @@ ui-dev:
 ui-dev-local:
 	cd ui && VITE_API_URL=http://localhost:3010 npm run dev
 
-.PHONY: build-lambda
-build-lambda: build-ui
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o ./var/dist/bootstrap ./cmd/lambda
-
 .PHONY: build-server
 build-server: build-ui
 	CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o ./var/dist/server ./cmd/server
