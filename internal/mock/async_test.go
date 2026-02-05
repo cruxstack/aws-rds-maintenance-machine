@@ -5,6 +5,36 @@ import (
 	"time"
 )
 
+// waitForStatus polls until the instance reaches the expected status or times out.
+func waitForStatus(state *State, instanceID, expectedStatus string, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for {
+		inst, ok := state.GetInstance(instanceID)
+		if ok && inst.Status == expectedStatus {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// waitForInstanceGone polls until the instance no longer exists or times out.
+func waitForInstanceGone(state *State, instanceID string, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for {
+		_, ok := state.GetInstance(instanceID)
+		if !ok {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
 // TestModifyInstance_AsyncBehavior verifies that ModifyInstance simulates AWS async behavior
 // where the API returns immediately but status change is delayed.
 func TestModifyInstance_AsyncBehavior(t *testing.T) {
@@ -42,15 +72,14 @@ func TestModifyInstance_AsyncBehavior(t *testing.T) {
 		t.Errorf("Instance status changed immediately to %s, expected to remain 'available' briefly", inst.Status)
 	}
 
-	// After a short delay, status should change to modifying
-	time.Sleep(100 * time.Millisecond)
-	inst, _ = state.GetInstance(instanceID)
-	if inst.Status != "modifying" {
+	// Wait for status to change to modifying (using polling, not fixed sleep)
+	if !waitForStatus(state, instanceID, "modifying", 500*time.Millisecond) {
+		inst, _ = state.GetInstance(instanceID)
 		t.Errorf("Expected status to be 'modifying' after delay, got %s", inst.Status)
 	}
 
 	// Wait for modification to complete
-	if !waitForInstanceStatus(state, instanceID, "available", 500*time.Millisecond) {
+	if !waitForStatus(state, instanceID, "available", 500*time.Millisecond) {
 		inst, _ = state.GetInstance(instanceID)
 		t.Errorf("Instance did not return to available, stuck at %s", inst.Status)
 	}
@@ -92,9 +121,8 @@ func TestConcurrentModifications_RaceCondition(t *testing.T) {
 		}
 	}
 
-	// All instances modified within milliseconds
-	// Now check that they all got modified (simulating the problem)
-	time.Sleep(100 * time.Millisecond)
+	// Wait a bit for async status changes to propagate
+	time.Sleep(200 * time.Millisecond)
 
 	modifyingCount := 0
 	for _, id := range instances {
@@ -146,7 +174,7 @@ func TestCreateInstance_AsyncBehavior(t *testing.T) {
 	}
 
 	// Wait for it to become available
-	if !waitForInstanceStatus(state, "test-async-instance", "available", 500*time.Millisecond) {
+	if !waitForStatus(state, "test-async-instance", "available", 500*time.Millisecond) {
 		created, _ = state.GetInstance("test-async-instance")
 		t.Errorf("Instance did not become available, stuck at %s", created.Status)
 	}
@@ -190,22 +218,13 @@ func TestDeleteInstance_AsyncBehavior(t *testing.T) {
 		t.Errorf("Instance status immediately changed to %s, expected to remain 'available' briefly", inst.Status)
 	}
 
-	// After delay, should transition to deleting
-	// Use polling instead of fixed sleep since the background ticker runs every 100ms
-	deadline := time.Now().Add(500 * time.Millisecond)
-	for {
-		inst, ok = state.GetInstance(instanceID)
-		if !ok {
-			// Instance was fully deleted - that's fine too
-			break
+	// Wait for status to change to deleting (using polling)
+	if !waitForStatus(state, instanceID, "deleting", 500*time.Millisecond) {
+		// Check if it was already fully deleted
+		if _, ok := state.GetInstance(instanceID); ok {
+			inst, _ := state.GetInstance(instanceID)
+			t.Errorf("Expected status to be 'deleting', got %s", inst.Status)
 		}
-		if inst.Status == "deleting" {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Errorf("Expected status to be 'deleting' after delay, got %s", inst.Status)
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
+		// If instance is gone, that's also acceptable
 	}
 }
