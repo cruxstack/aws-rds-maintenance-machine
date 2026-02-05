@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CreateDBParameterGroupResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+  <CreateDBParameterGroupResult>
+    <DBParameterGroup>
+      <DBParameterGroupName>{{.Name}}</DBParameterGroupName>
+      <DBParameterGroupFamily>{{.Family}}</DBParameterGroupFamily>
+      <Description>{{.Description}}</Description>
+    </DBParameterGroup>
+  </CreateDBParameterGroupResult>
+  <ResponseMetadata>
+    <RequestId>mock-request-id</RequestId>
+  </ResponseMetadata>
+</CreateDBParameterGroupResponse>

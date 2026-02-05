@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DescribeDBInstancesResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+  <DescribeDBInstancesResult>
+    <DBInstances>
+{{- range .Instances}}
+      <DBInstance>
+        <DBInstanceIdentifier>{{.ID}}</DBInstanceIdentifier>
+        <DBInstanceClass>{{.InstanceType}}</DBInstanceClass>
+        <DBInstanceStatus>{{.Status}}</DBInstanceStatus>
+        <DBInstanceArn>{{.ARN}}</DBInstanceArn>
+        <StorageType>{{.StorageType}}</StorageType>
+        <DBClusterIdentifier>{{.ClusterID}}</DBClusterIdentifier>
+        <DBParameterGroups>
+          <DBParameterGroup>
+            <DBParameterGroupName>{{.ParameterGroup}}</DBParameterGroupName>
+            <ParameterApplyStatus>in-sync</ParameterApplyStatus>
+          </DBParameterGroup>
+        </DBParameterGroups>
+{{- if .IOPS}}
+        <Iops>{{.IOPS}}</Iops>
+{{- end}}
+      </DBInstance>
+{{- end}}
+    </DBInstances>
+  </DescribeDBInstancesResult>
+  <ResponseMetadata>
+    <RequestId>mock-request-id</RequestId>
+  </ResponseMetadata>
+</DescribeDBInstancesResponse>

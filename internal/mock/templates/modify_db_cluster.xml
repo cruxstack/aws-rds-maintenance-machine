@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ModifyDBClusterResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+  <ModifyDBClusterResult>
+    <DBCluster>
+      <DBClusterIdentifier>{{.ID}}</DBClusterIdentifier>
+      <Engine>{{.Engine}}</Engine>
+      <EngineVersion>{{.EngineVersion}}</EngineVersion>
+      <Status>{{.Status}}</Status>
+    </DBCluster>
+  </ModifyDBClusterResult>
+  <ResponseMetadata>
+    <RequestId>mock-request-id</RequestId>
+  </ResponseMetadata>
+</ModifyDBClusterResponse>

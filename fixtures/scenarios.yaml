@@ -1,0 +1,507 @@
+# RDS Maintenance Machine Test Scenarios
+# These scenarios test the state machine operations offline using mock AWS responses
+
+# =============================================================================
+# Basic RDS Client Tests
+# =============================================================================
+
+- name: get_cluster_info_success
+  description: Successfully retrieve cluster information
+  action: get_cluster_info
+  cluster_id: test-cluster
+  mock_responses:
+    - service: rds
+      method: POST
+      path: /
+      action: DescribeDBClusters
+      status_code: 200
+      headers:
+        Content-Type: text/xml
+      body: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <DescribeDBClustersResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+          <DescribeDBClustersResult>
+            <DBClusters>
+              <DBCluster>
+                <DBClusterIdentifier>test-cluster</DBClusterIdentifier>
+                <Engine>aurora-postgresql</Engine>
+                <EngineVersion>15.4</EngineVersion>
+                <Status>available</Status>
+                <DBClusterMembers>
+                  <DBClusterMember>
+                    <DBInstanceIdentifier>test-cluster-1</DBInstanceIdentifier>
+                    <IsClusterWriter>true</IsClusterWriter>
+                  </DBClusterMember>
+                  <DBClusterMember>
+                    <DBInstanceIdentifier>test-cluster-2</DBInstanceIdentifier>
+                    <IsClusterWriter>false</IsClusterWriter>
+                  </DBClusterMember>
+                </DBClusterMembers>
+              </DBCluster>
+            </DBClusters>
+          </DescribeDBClustersResult>
+        </DescribeDBClustersResponse>
+    - service: rds
+      method: POST
+      path: /
+      action: DescribeDBInstances
+      status_code: 200
+      headers:
+        Content-Type: text/xml
+      body: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <DescribeDBInstancesResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+          <DescribeDBInstancesResult>
+            <DBInstances>
+              <DBInstance>
+                <DBInstanceIdentifier>test-cluster-1</DBInstanceIdentifier>
+                <DBInstanceClass>db.r6g.large</DBInstanceClass>
+                <DBInstanceStatus>available</DBInstanceStatus>
+                <DBInstanceArn>arn:aws:rds:us-east-1:123456789012:db:test-cluster-1</DBInstanceArn>
+                <StorageType>aurora</StorageType>
+              </DBInstance>
+            </DBInstances>
+          </DescribeDBInstancesResult>
+        </DescribeDBInstancesResponse>
+    - service: rds
+      method: POST
+      path: /
+      action: ListTagsForResource
+      status_code: 200
+      headers:
+        Content-Type: text/xml
+      body: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <ListTagsForResourceResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+          <ListTagsForResourceResult>
+            <TagList></TagList>
+          </ListTagsForResourceResult>
+        </ListTagsForResourceResponse>
+  expected_calls:
+    - service: rds
+      method: POST
+      path: /
+
+- name: get_cluster_info_not_found
+  description: Cluster not found returns error
+  action: get_cluster_info
+  cluster_id: missing-cluster
+  expect_error: true
+  mock_responses:
+    - service: rds
+      method: POST
+      path: /
+      action: DescribeDBClusters
+      status_code: 400
+      headers:
+        Content-Type: text/xml
+      body: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <ErrorResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+          <Error>
+            <Type>Sender</Type>
+            <Code>DBClusterNotFoundFault</Code>
+            <Message>DBCluster missing-cluster not found</Message>
+          </Error>
+        </ErrorResponse>
+  expected_calls:
+    - service: rds
+      method: POST
+      path: /
+
+# =============================================================================
+# Instance Type Change Operation Tests
+# Zero-downtime instance type change:
+# 1. Get cluster info
+# 2. Create temp reader with new instance type
+# 3. Wait for temp reader to be available
+# 4. Failover to temp reader (it becomes writer)
+# 5. Wait for cluster to stabilize
+# 6. Modify each original non-autoscaled instance to new type
+# 7. Wait for each instance to be available
+# 8. Failover back to original writer
+# 9. Wait for cluster to stabilize
+# 10. Delete temp instance
+# 11. Wait for temp instance deletion
+# =============================================================================
+
+- name: instance_type_change_single_instance_cluster
+  description: Instance type change on single-instance cluster creates correct steps
+  action: create_operation
+  operation_type: instance_type_change
+  cluster_id: single-cluster
+  params:
+    target_instance_type: db.r6g.xlarge
+  # Steps: get_cluster_info + create_temp + wait + failover + wait + modify(1) + wait(1) + failover_back + wait + delete + wait_delete
+  expect_steps: 11
+  mock_responses:
+    - service: rds
+      method: POST
+      path: /
+      action: DescribeDBClusters
+      status_code: 200
+      headers:
+        Content-Type: text/xml
+      body: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <DescribeDBClustersResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+          <DescribeDBClustersResult>
+            <DBClusters>
+              <DBCluster>
+                <DBClusterIdentifier>single-cluster</DBClusterIdentifier>
+                <Engine>aurora-postgresql</Engine>
+                <EngineVersion>15.4</EngineVersion>
+                <Status>available</Status>
+                <DBClusterMembers>
+                  <DBClusterMember>
+                    <DBInstanceIdentifier>single-cluster-writer</DBInstanceIdentifier>
+                    <IsClusterWriter>true</IsClusterWriter>
+                  </DBClusterMember>
+                </DBClusterMembers>
+              </DBCluster>
+            </DBClusters>
+          </DescribeDBClustersResult>
+        </DescribeDBClustersResponse>
+    - service: rds
+      method: POST
+      path: /
+      action: DescribeDBInstances
+      status_code: 200
+      headers:
+        Content-Type: text/xml
+      body: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <DescribeDBInstancesResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+          <DescribeDBInstancesResult>
+            <DBInstances>
+              <DBInstance>
+                <DBInstanceIdentifier>single-cluster-writer</DBInstanceIdentifier>
+                <DBInstanceClass>db.r6g.large</DBInstanceClass>
+                <DBInstanceStatus>available</DBInstanceStatus>
+                <DBInstanceArn>arn:aws:rds:us-east-1:123456789012:db:single-cluster-writer</DBInstanceArn>
+                <StorageType>aurora</StorageType>
+              </DBInstance>
+            </DBInstances>
+          </DescribeDBInstancesResult>
+        </DescribeDBInstancesResponse>
+    - service: rds
+      method: POST
+      path: /
+      action: ListTagsForResource
+      status_code: 200
+      headers:
+        Content-Type: text/xml
+      body: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <ListTagsForResourceResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+          <ListTagsForResourceResult>
+            <TagList></TagList>
+          </ListTagsForResourceResult>
+        </ListTagsForResourceResponse>
+  expected_actions:
+    - DescribeDBClusters
+    - DescribeDBInstances
+    - ListTagsForResource
+  expected_calls:
+    - service: rds
+      method: POST
+      path: /
+
+# =============================================================================
+# Storage Type Change Operation Tests
+# Zero-downtime storage type change (similar to instance type)
+# =============================================================================
+
+- name: storage_type_change_single_instance_cluster
+  description: Storage type change on single-instance cluster creates correct steps
+  action: create_operation
+  operation_type: storage_type_change
+  cluster_id: single-cluster
+  params:
+    target_storage_type: io1
+    iops: 10000
+  # Same step count as instance type change for single-instance cluster
+  expect_steps: 11
+  mock_responses:
+    - service: rds
+      method: POST
+      path: /
+      action: DescribeDBClusters
+      status_code: 200
+      headers:
+        Content-Type: text/xml
+      body: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <DescribeDBClustersResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+          <DescribeDBClustersResult>
+            <DBClusters>
+              <DBCluster>
+                <DBClusterIdentifier>single-cluster</DBClusterIdentifier>
+                <Engine>aurora-postgresql</Engine>
+                <EngineVersion>15.4</EngineVersion>
+                <Status>available</Status>
+                <DBClusterMembers>
+                  <DBClusterMember>
+                    <DBInstanceIdentifier>single-cluster-writer</DBInstanceIdentifier>
+                    <IsClusterWriter>true</IsClusterWriter>
+                  </DBClusterMember>
+                </DBClusterMembers>
+              </DBCluster>
+            </DBClusters>
+          </DescribeDBClustersResult>
+        </DescribeDBClustersResponse>
+    - service: rds
+      method: POST
+      path: /
+      action: DescribeDBInstances
+      status_code: 200
+      headers:
+        Content-Type: text/xml
+      body: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <DescribeDBInstancesResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+          <DescribeDBInstancesResult>
+            <DBInstances>
+              <DBInstance>
+                <DBInstanceIdentifier>single-cluster-writer</DBInstanceIdentifier>
+                <DBInstanceClass>db.r6g.large</DBInstanceClass>
+                <DBInstanceStatus>available</DBInstanceStatus>
+                <DBInstanceArn>arn:aws:rds:us-east-1:123456789012:db:single-cluster-writer</DBInstanceArn>
+                <StorageType>gp3</StorageType>
+              </DBInstance>
+            </DBInstances>
+          </DescribeDBInstancesResult>
+        </DescribeDBInstancesResponse>
+    - service: rds
+      method: POST
+      path: /
+      action: ListTagsForResource
+      status_code: 200
+      headers:
+        Content-Type: text/xml
+      body: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <ListTagsForResourceResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+          <ListTagsForResourceResult>
+            <TagList></TagList>
+          </ListTagsForResourceResult>
+        </ListTagsForResourceResponse>
+  expected_actions:
+    - DescribeDBClusters
+    - DescribeDBInstances
+  expected_calls:
+    - service: rds
+      method: POST
+      path: /
+
+# =============================================================================
+# Engine Upgrade Operation Tests
+# Engine major version upgrade (downtime expected):
+# 1. Get cluster info
+# 2. Create pre-upgrade snapshot (REQUIRED)
+# 3. Wait for snapshot
+# 4. Modify cluster (upgrade engine version)
+# 5. Wait for cluster upgrade
+# 6. Get cluster info to verify
+# =============================================================================
+
+- name: engine_upgrade_creates_snapshot_and_upgrades
+  description: Engine upgrade creates pre-upgrade snapshot before upgrading
+  action: create_operation
+  operation_type: engine_upgrade
+  cluster_id: upgrade-cluster
+  params:
+    target_engine_version: "16.4"
+    allow_major_version_upgrade: true
+  # Steps: get_cluster_info + create_snapshot + wait_snapshot + modify_cluster + wait_cluster + verify(get_cluster_info)
+  # Note: Engine upgrade does NOT call GetClusterInfo during build phase - steps are built without RDS calls
+  expect_steps: 6
+  mock_responses: []
+  expected_calls: []
+
+# =============================================================================
+# Autoscaled Instance Handling Tests
+# Autoscaled instances (tagged with application-autoscaling:resourceId) should
+# be skipped for modification since they're managed by autoscaling policy.
+# Non-autoscaled instances are managed by Terraform and should be modified.
+# =============================================================================
+
+- name: instance_type_change_skips_autoscaled_instance
+  description: Instance type change skips autoscaled instances, only modifies terraform-managed
+  action: create_operation
+  operation_type: instance_type_change
+  cluster_id: mixed-cluster
+  params:
+    target_instance_type: db.r6g.xlarge
+  # With one autoscaled instance skipped, we only modify the writer
+  # Steps: get_cluster_info + create_temp + wait + failover + wait + modify(1) + wait(1) + failover_back + wait + delete + wait_delete = 11
+  expect_steps: 11
+  mock_responses:
+    - service: rds
+      method: POST
+      path: /
+      action: DescribeDBClusters
+      status_code: 200
+      headers:
+        Content-Type: text/xml
+      body: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <DescribeDBClustersResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+          <DescribeDBClustersResult>
+            <DBClusters>
+              <DBCluster>
+                <DBClusterIdentifier>mixed-cluster</DBClusterIdentifier>
+                <Engine>aurora-postgresql</Engine>
+                <EngineVersion>15.4</EngineVersion>
+                <Status>available</Status>
+                <DBClusterMembers>
+                  <DBClusterMember>
+                    <DBInstanceIdentifier>mixed-cluster-writer</DBInstanceIdentifier>
+                    <IsClusterWriter>true</IsClusterWriter>
+                  </DBClusterMember>
+                </DBClusterMembers>
+              </DBCluster>
+            </DBClusters>
+          </DescribeDBClustersResult>
+        </DescribeDBClustersResponse>
+    - service: rds
+      method: POST
+      path: /
+      action: DescribeDBInstances
+      status_code: 200
+      headers:
+        Content-Type: text/xml
+      body: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <DescribeDBInstancesResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+          <DescribeDBInstancesResult>
+            <DBInstances>
+              <DBInstance>
+                <DBInstanceIdentifier>mixed-cluster-writer</DBInstanceIdentifier>
+                <DBInstanceClass>db.r6g.large</DBInstanceClass>
+                <DBInstanceStatus>available</DBInstanceStatus>
+                <DBInstanceArn>arn:aws:rds:us-east-1:123456789012:db:mixed-cluster-writer</DBInstanceArn>
+                <StorageType>aurora</StorageType>
+              </DBInstance>
+            </DBInstances>
+          </DescribeDBInstancesResult>
+        </DescribeDBInstancesResponse>
+    # Return autoscaling tag to indicate this is an autoscaled instance
+    - service: rds
+      method: POST
+      path: /
+      action: ListTagsForResource
+      status_code: 200
+      headers:
+        Content-Type: text/xml
+      body: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <ListTagsForResourceResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+          <ListTagsForResourceResult>
+            <TagList></TagList>
+          </ListTagsForResourceResult>
+        </ListTagsForResourceResponse>
+  expected_calls:
+    - service: rds
+      method: POST
+      path: /
+
+# =============================================================================
+# Error Handling Tests
+# =============================================================================
+
+- name: instance_type_change_missing_param
+  description: Instance type change fails without target_instance_type parameter
+  action: create_operation
+  operation_type: instance_type_change
+  cluster_id: test-cluster
+  params: {}
+  expect_error: true
+  mock_responses:
+    - service: rds
+      method: POST
+      path: /
+      action: DescribeDBClusters
+      status_code: 200
+      headers:
+        Content-Type: text/xml
+      body: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <DescribeDBClustersResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+          <DescribeDBClustersResult>
+            <DBClusters>
+              <DBCluster>
+                <DBClusterIdentifier>test-cluster</DBClusterIdentifier>
+                <Engine>aurora-postgresql</Engine>
+                <EngineVersion>15.4</EngineVersion>
+                <Status>available</Status>
+                <DBClusterMembers></DBClusterMembers>
+              </DBCluster>
+            </DBClusters>
+          </DescribeDBClustersResult>
+        </DescribeDBClustersResponse>
+  expected_calls: []
+
+- name: storage_type_change_missing_param
+  description: Storage type change fails without target_storage_type parameter
+  action: create_operation
+  operation_type: storage_type_change
+  cluster_id: test-cluster
+  params: {}
+  expect_error: true
+  mock_responses:
+    - service: rds
+      method: POST
+      path: /
+      action: DescribeDBClusters
+      status_code: 200
+      headers:
+        Content-Type: text/xml
+      body: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <DescribeDBClustersResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+          <DescribeDBClustersResult>
+            <DBClusters>
+              <DBCluster>
+                <DBClusterIdentifier>test-cluster</DBClusterIdentifier>
+                <Engine>aurora-postgresql</Engine>
+                <EngineVersion>15.4</EngineVersion>
+                <Status>available</Status>
+                <DBClusterMembers></DBClusterMembers>
+              </DBCluster>
+            </DBClusters>
+          </DescribeDBClustersResult>
+        </DescribeDBClustersResponse>
+  expected_calls: []
+
+- name: engine_upgrade_missing_param
+  description: Engine upgrade fails without target_engine_version parameter
+  action: create_operation
+  operation_type: engine_upgrade
+  cluster_id: test-cluster
+  params: {}
+  expect_error: true
+  mock_responses:
+    - service: rds
+      method: POST
+      path: /
+      action: DescribeDBClusters
+      status_code: 200
+      headers:
+        Content-Type: text/xml
+      body: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <DescribeDBClustersResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+          <DescribeDBClustersResult>
+            <DBClusters>
+              <DBCluster>
+                <DBClusterIdentifier>test-cluster</DBClusterIdentifier>
+                <Engine>aurora-postgresql</Engine>
+                <EngineVersion>15.4</EngineVersion>
+                <Status>available</Status>
+                <DBClusterMembers></DBClusterMembers>
+              </DBCluster>
+            </DBClusters>
+          </DescribeDBClustersResult>
+        </DescribeDBClustersResponse>
+  expected_calls: []

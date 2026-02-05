@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DescribeDBProxiesResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+  <DescribeDBProxiesResult>
+    <DBProxies>
+{{- range .Proxies}}
+      <member>
+        <DBProxyName>{{.ProxyName}}</DBProxyName>
+        <DBProxyArn>{{.ProxyARN}}</DBProxyArn>
+        <Status>{{.Status}}</Status>
+        <EngineFamily>{{.EngineFamily}}</EngineFamily>
+        <Endpoint>{{.Endpoint}}</Endpoint>
+        <VpcId>{{.VpcID}}</VpcId>
+      </member>
+{{- end}}
+    </DBProxies>
+  </DescribeDBProxiesResult>
+  <ResponseMetadata>
+    <RequestId>mock-request-id</RequestId>
+  </ResponseMetadata>
+</DescribeDBProxiesResponse>

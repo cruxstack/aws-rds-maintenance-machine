@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RDS Maintenance Machine{{if .DemoMode}} - Demo Mode{{end}}</title>
+    <link rel="icon" type="image/svg+xml" href="{{if .DemoMode}}/favicon-demo.svg{{else}}/favicon.svg{{end}}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            {{if .DemoMode}}
+            <div class="header-left">
+                <h1>RDS Maintenance Machine</h1>
+                <span class="demo-badge">Demo Mode</span>
+            </div>
+            {{else}}
+            <h1>RDS Maintenance Machine</h1>
+            {{end}}
+            <span id="status-badge" class="status-badge status-ok">Connected</span>
+        </header>
+        
+        {{if .DemoMode}}
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('operations')">Operations</div>
+            <div class="tab" onclick="switchTab('demo')">Demo Controls</div>
+        </div>
+        {{end}}
+        
+        <!-- Operations Tab -->
+        <div id="tab-operations" class="tab-content active">
+            <div class="grid">
+                <div class="sidebar">
+                    <div class="card">
+                        <div class="card-header">
+                            <div>
+                                <span class="card-title">New Operation</span>
+                                <p class="card-description">Create a new maintenance operation</p>
+                            </div>
+                        </div>
+                        <form id="create-form">
+                            <!-- Region + cluster dropdowns (same for both modes) -->
+                            <div class="form-group">
+                                <label>AWS Region</label>
+                                <div class="custom-select" data-select-id="region-select">
+                                    <button type="button" class="custom-select-trigger placeholder" aria-haspopup="listbox">
+                                        <span>Loading regions...</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                                    </button>
+                                    <div class="custom-select-dropdown" role="listbox" id="region-options">
+                                        <div class="custom-select-option" data-value="" role="option">Loading regions...</div>
+                                    </div>
+                                    <select id="region-select" required tabindex="-1" aria-hidden="true">
+                                        <option value="">Loading regions...</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Cluster</label>
+                                <div class="custom-select" data-select-id="cluster-select">
+                                    <button type="button" class="custom-select-trigger placeholder" aria-haspopup="listbox" disabled>
+                                        <span>Select a region first...</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                                    </button>
+                                    <div class="custom-select-dropdown" role="listbox" id="cluster-options">
+                                        <div class="custom-select-option" data-value="" role="option">Select a region first...</div>
+                                    </div>
+                                    <select id="cluster-select" required tabindex="-1" aria-hidden="true" disabled>
+                                        <option value="">Select a region first...</option>
+                                    </select>
+                                </div>
+                                <p id="cluster-loading" class="card-description" style="display: none;">Loading clusters...</p>
+                            </div>
+                            <div class="form-group">
+                                <label>Operation Type</label>
+                                <div class="custom-select" data-select-id="operation-type">
+                                    <button type="button" class="custom-select-trigger placeholder" aria-haspopup="listbox" disabled>
+                                        <span>Select a cluster first...</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                                    </button>
+                                    <div class="custom-select-dropdown" role="listbox">
+                                        <div class="custom-select-option" data-value="" role="option">Select operation...</div>
+                                        <div class="custom-select-option" data-value="engine_upgrade" role="option">Engine Upgrade</div>
+                                        <div class="custom-select-option" data-value="instance_cycle" role="option">Instance Cycle (Reboot)</div>
+                                        <div class="custom-select-option" data-value="instance_type_change" role="option">Instance Type Change</div>
+                                    </div>
+                                    <select id="operation-type" required tabindex="-1" aria-hidden="true">
+                                        <option value="">Select operation...</option>
+                                        <option value="engine_upgrade">Engine Upgrade</option>
+                                        <option value="instance_cycle">Instance Cycle (Reboot)</option>
+                                        <option value="instance_type_change">Instance Type Change</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="params-container"></div>
+                            <button type="submit" class="btn-primary" style="width: 100%;">Create Operation</button>
+                        </form>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-header">
+                            <div>
+                                <span class="card-title">Operations</span>
+                                <p class="card-description">Recent maintenance operations</p>
+                            </div>
+                            <button onclick="loadOperations()" class="btn-sm btn-ghost">Refresh</button>
+                        </div>
+                        <div id="operations-list" class="operation-list">
+                            <div class="empty-state">
+                                <p>No operations yet</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="main">
+                    <div id="operation-detail" class="card">
+                        <div class="empty-state">
+                            <p>Select an operation to view details</p>
+                            <p style="font-size: 12px;">Or create a new operation from the sidebar</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Cluster status panel (both modes) -->
+                    <div id="ops-clusters-card" class="card" style="margin-top: 20px; display: none;">
+                        <div class="card-header">
+                            <div>
+                                <span class="card-title">Cluster Status</span>
+                                <p class="card-description">Real-time view of cluster instances</p>
+                            </div>
+                            <span id="cluster-refresh-indicator" style="font-size: 11px; color: var(--muted-foreground); font-family: monospace;"></span>
+                        </div>
+                        <div id="ops-clusters-container">
+                            <div class="empty-state" style="padding: 24px;">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        {{if .DemoMode}}
+        <!-- Demo Controls Tab -->
+        <div id="tab-demo" class="tab-content">
+            <div class="grid-3" style="margin-bottom: 20px;">
+                <!-- Timing Controls -->
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <span class="card-title">Timing Settings</span>
+                            <p class="card-description">Control mock server timing</p>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>Fast Mode</span>
+                            <label class="toggle">
+                                <input type="checkbox" id="fast-mode" onchange="updateTiming()">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>Base Wait Time</label>
+                        <div class="slider-container">
+                            <input type="range" id="base-wait" min="100" max="5000" step="100" value="500" oninput="updateSliderValue('base-wait')" onchange="updateTiming(true)">
+                            <span class="slider-value" id="base-wait-value">500ms</span>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Random Range</label>
+                        <div class="slider-container">
+                            <input type="range" id="random-range" min="0" max="2000" step="100" value="200" oninput="updateSliderValue('random-range')" onchange="updateTiming(true)">
+                            <span class="slider-value" id="random-range-value">200ms</span>
+                        </div>
+                    </div>
+                    <div class="separator"></div>
+                    <button onclick="resetState()" class="btn-danger" style="width: 100%;">Reset All State</button>
+                </div>
+                
+                <!-- Fault Injection -->
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <span class="card-title">Fault Injection</span>
+                            <p class="card-description">Simulate failures and delays</p>
+                        </div>
+                    </div>
+                    <form id="fault-form">
+                        <div class="form-group">
+                            <label>Fault Type</label>
+                            <div class="custom-select" data-select-id="fault-type">
+                                <button type="button" class="custom-select-trigger" aria-haspopup="listbox">
+                                    <span>API Error</span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                                </button>
+                                <div class="custom-select-dropdown" role="listbox">
+                                    <div class="custom-select-option selected" data-value="api_error" role="option">API Error</div>
+                                    <div class="custom-select-option" data-value="delay" role="option">Extra Delay</div>
+                                    <div class="custom-select-option" data-value="stuck" role="option">Stuck in State</div>
+                                </div>
+                                <select id="fault-type" required tabindex="-1" aria-hidden="true">
+                                    <option value="api_error">API Error</option>
+                                    <option value="delay">Extra Delay</option>
+                                    <option value="stuck">Stuck in State</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Target Action</label>
+                            <div class="custom-select" data-select-id="fault-action">
+                                <button type="button" class="custom-select-trigger placeholder" aria-haspopup="listbox">
+                                    <span>Any Action</span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                                </button>
+                                <div class="custom-select-dropdown" role="listbox">
+                                    <div class="custom-select-option selected" data-value="" role="option">Any Action</div>
+                                    <div class="custom-select-option" data-value="CreateDBInstance" role="option">CreateDBInstance</div>
+                                    <div class="custom-select-option" data-value="ModifyDBInstance" role="option">ModifyDBInstance</div>
+                                    <div class="custom-select-option" data-value="DeleteDBInstance" role="option">DeleteDBInstance</div>
+                                    <div class="custom-select-option" data-value="FailoverDBCluster" role="option">FailoverDBCluster</div>
+                                    <div class="custom-select-option" data-value="ModifyDBCluster" role="option">ModifyDBCluster</div>
+                                    <div class="custom-select-option" data-value="CreateDBClusterSnapshot" role="option">CreateDBClusterSnapshot</div>
+                                </div>
+                                <select id="fault-action" tabindex="-1" aria-hidden="true">
+                                    <option value="">Any Action</option>
+                                    <option value="CreateDBInstance">CreateDBInstance</option>
+                                    <option value="ModifyDBInstance">ModifyDBInstance</option>
+                                    <option value="DeleteDBInstance">DeleteDBInstance</option>
+                                    <option value="FailoverDBCluster">FailoverDBCluster</option>
+                                    <option value="ModifyDBCluster">ModifyDBCluster</option>
+                                    <option value="CreateDBClusterSnapshot">CreateDBClusterSnapshot</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Target Resource (optional)</label>
+                            <input type="text" id="fault-target" placeholder="e.g., demo-multi-writer">
+                        </div>
+                        <div class="form-group">
+                            <label>Probability (%)</label>
+                            <input type="number" id="fault-probability" value="100" min="1" max="100">
+                        </div>
+                        <div id="fault-params"></div>
+                        <button type="submit" class="btn-warning" style="width: 100%;">Add Fault</button>
+                    </form>
+                </div>
+                
+                <!-- Configured Faults -->
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <span class="card-title">Configured Faults</span>
+                            <p class="card-description">Active fault injections</p>
+                        </div>
+                        <button onclick="clearFaults()" class="btn-sm btn-danger">Clear All</button>
+                    </div>
+                    <div class="fault-list" id="faults-list">
+                        <div class="empty-state" style="padding: 20px;">No faults configured</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Mock Clusters -->
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <span class="card-title">Mock Clusters</span>
+                        <p class="card-description">Current cluster state</p>
+                    </div>
+                    <button onclick="loadMockState()" class="btn-sm btn-ghost">Refresh</button>
+                </div>
+                <div id="clusters-container">
+                    <div class="empty-state" style="padding: 24px;">Loading...</div>
+                </div>
+            </div>
+        </div>
+        {{end}}
+    </div>
+    
+    <!-- Resume Modal -->
+    <div id="resume-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Resume Operation</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Action</label>
+                <div class="custom-select" data-select-id="resume-action">
+                    <button type="button" class="custom-select-trigger" aria-haspopup="listbox">
+                        <span>Continue</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <div class="custom-select-dropdown" role="listbox">
+                        <div class="custom-select-option selected" data-value="continue" role="option">Continue</div>
+                        <div class="custom-select-option" data-value="rollback" role="option">Rollback</div>
+                        <div class="custom-select-option" data-value="abort" role="option">Abort</div>
+                        <div class="custom-select-option" data-value="mark_complete" role="option">Mark Complete</div>
+                    </div>
+                    <select id="resume-action" tabindex="-1" aria-hidden="true">
+                        <option value="continue">Continue</option>
+                        <option value="rollback">Rollback</option>
+                        <option value="abort">Abort</option>
+                        <option value="mark_complete">Mark Complete</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Comment (optional)</label>
+                <input type="text" id="resume-comment" placeholder="Reason for action...">
+            </div>
+            <button onclick="submitResume()" class="btn-primary" style="width: 100%;">Submit</button>
+        </div>
+    </div>
+
+    {{if not .DemoMode}}
+    <!-- Timeout Modal (production only) -->
+    <div id="timeout-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Update Wait Timeout</h3>
+                <button class="modal-close" onclick="closeTimeoutModal()">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Timeout (seconds)</label>
+                <input type="number" id="timeout-value" min="60" max="7200" placeholder="2700">
+                <p class="card-description">Default: 2700 (45 minutes). Max: 7200 (2 hours).</p>
+            </div>
+            <button onclick="submitTimeout()" class="btn-primary" style="width: 100%;">Update Timeout</button>
+        </div>
+    </div>
+    {{end}}
+
+    <!-- Alert Dialog -->
+    <div id="alert-dialog" class="alert-dialog">
+        <div class="alert-dialog-overlay"></div>
+        <div class="alert-dialog-content">
+            <div class="alert-dialog-header">
+                <div class="alert-dialog-icon alert-dialog-icon-error">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                </div>
+                <h3 class="alert-dialog-title">Error</h3>
+            </div>
+            <code class="alert-dialog-description" id="alert-dialog-message"></code>
+            <div class="alert-dialog-footer">
+                <button class="btn-primary" onclick="closeAlertDialog()">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirm Dialog -->
+    <div id="confirm-dialog" class="alert-dialog">
+        <div class="alert-dialog-overlay"></div>
+        <div class="alert-dialog-content">
+            <div class="alert-dialog-header">
+                <div class="alert-dialog-icon alert-dialog-icon-warning">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                </div>
+                <h3 class="confirm-dialog-title">Confirm</h3>
+            </div>
+            <p class="alert-dialog-description" id="confirm-dialog-message"></p>
+            <div class="alert-dialog-footer">
+                <button class="btn-secondary" onclick="closeConfirmDialog(false)">Cancel</button>
+                <button class="btn-danger" id="confirm-dialog-action" onclick="closeConfirmDialog(true)">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script>const isDemoMode = {{.DemoMode}};</script>
+    <script src="/static/main.js"></script>
+    {{if .DemoMode}}
+    <script src="/static/demo.js"></script>
+    {{end}}
+</body>
+</html>

@@ -1,0 +1,25 @@
+{{define "blue_green_deployment"}}
+      <BlueGreenDeploymentIdentifier>{{.Identifier}}</BlueGreenDeploymentIdentifier>
+      <BlueGreenDeploymentName>{{.Name}}</BlueGreenDeploymentName>
+      <Source>{{.SourceClusterARN}}</Source>
+      <Target>{{.TargetClusterARN}}</Target>
+      <Status>{{.Status}}</Status>
+      <StatusDetails>{{.StatusDetails}}</StatusDetails>
+      <Tasks>
+{{- range .Tasks}}
+        <member>
+          <Name>{{.Name}}</Name>
+          <Status>{{.Status}}</Status>
+        </member>
+{{- end}}
+      </Tasks>
+      <SwitchoverDetails>
+{{- range .SwitchoverDetails}}
+        <member>
+          <SourceMember>{{.SourceMember}}</SourceMember>
+          <TargetMember>{{.TargetMember}}</TargetMember>
+          <Status>{{.Status}}</Status>
+        </member>
+{{- end}}
+      </SwitchoverDetails>
+{{end}}

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DescribeDBParametersResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+  <DescribeDBParametersResult>
+    <Parameters>
+    </Parameters>
+  </DescribeDBParametersResult>
+  <ResponseMetadata>
+    <RequestId>mock-request-id</RequestId>
+  </ResponseMetadata>
+</DescribeDBParametersResponse>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FailoverDBClusterResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+  <FailoverDBClusterResult>
+    <DBCluster>
+      <DBClusterIdentifier>{{.ID}}</DBClusterIdentifier>
+      <Status>{{.Status}}</Status>
+    </DBCluster>
+  </FailoverDBClusterResult>
+  <ResponseMetadata>
+    <RequestId>mock-request-id</RequestId>
+  </ResponseMetadata>
+</FailoverDBClusterResponse>

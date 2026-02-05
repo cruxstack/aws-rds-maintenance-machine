@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DeleteDBClusterResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+  <DeleteDBClusterResult>
+    <DBCluster>
+      <DBClusterIdentifier>{{.ID}}</DBClusterIdentifier>
+      <Status>deleting</Status>
+      <Engine>{{.Engine}}</Engine>
+      <EngineVersion>{{.EngineVersion}}</EngineVersion>
+    </DBCluster>
+  </DeleteDBClusterResult>
+  <ResponseMetadata>
+    <RequestId>mock-request-id</RequestId>
+  </ResponseMetadata>
+</DeleteDBClusterResponse>

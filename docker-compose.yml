@@ -1,0 +1,40 @@
+services:
+  # demo mode - runs mock rds api server w/ main app for local testing
+  demo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        TARGET: demo
+    ports:
+      - "8080:8080"   # main web ui
+      - "9080:9080"   # mock rds api server
+    volumes:
+      - ./.var/data/demo:/app/data
+    environment:
+      - APP_DATA_DIR=/app/data
+      - APP_AUTO_RESUME=true
+      - APP_DEMO_MODE=true
+    profiles:
+      - demo
+
+  # local server mode - runs the production server locally
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        TARGET: server
+    ports:
+      - "3010:3010"
+    volumes:
+      - ./.var/data/server:/app/data
+      - ~/.aws:/home/appuser/.aws:ro
+    env_file:
+      - .env
+    environment:
+      - AWS_PROFILE=${AWS_PROFILE}
+      - APP_DATA_DIR=/app/data
+      - APP_PORT=3010
+    profiles:
+      - server

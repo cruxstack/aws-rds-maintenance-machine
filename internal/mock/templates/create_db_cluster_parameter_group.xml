@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CreateDBClusterParameterGroupResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
+  <CreateDBClusterParameterGroupResult>
+    <DBClusterParameterGroup>
+      <DBClusterParameterGroupName>{{.Name}}</DBClusterParameterGroupName>
+      <DBParameterGroupFamily>{{.Family}}</DBParameterGroupFamily>
+      <Description>{{.Description}}</Description>
+    </DBClusterParameterGroup>
+  </CreateDBClusterParameterGroupResult>
+  <ResponseMetadata>
+    <RequestId>mock-request-id</RequestId>
+  </ResponseMetadata>
+</CreateDBClusterParameterGroupResponse>
