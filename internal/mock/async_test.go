@@ -191,9 +191,21 @@ func TestDeleteInstance_AsyncBehavior(t *testing.T) {
 	}
 
 	// After delay, should transition to deleting
-	time.Sleep(100 * time.Millisecond)
-	inst, ok = state.GetInstance(instanceID)
-	if ok && inst.Status != "deleting" {
-		t.Errorf("Expected status to be 'deleting' after delay, got %s", inst.Status)
+	// Use polling instead of fixed sleep since the background ticker runs every 100ms
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for {
+		inst, ok = state.GetInstance(instanceID)
+		if !ok {
+			// Instance was fully deleted - that's fine too
+			break
+		}
+		if inst.Status == "deleting" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Errorf("Expected status to be 'deleting' after delay, got %s", inst.Status)
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }
