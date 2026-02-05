@@ -257,6 +257,16 @@ ______________________________________________________________________
 
 # Development
 
+## Architecture
+
+The application is a single Go binary that serves both the REST API and a React
+single-page application. The React UI is built as static assets and embedded
+into the Go binary at compile time using `go:embed`. This means:
+
+- No separate web server or CDN is required
+- The entire application (API + UI) runs as one process
+- Deployment is a single binary with no external dependencies
+
 ## Project Structure
 
 ```
@@ -266,13 +276,14 @@ cmd/
   verify/                # integration test harness
 internal/
   app/                   # application logic and http routing
+  app/ui/                # embedded react ui assets (built from ui/)
   machine/               # state machine engine and step handlers
   rds/                   # aws rds client wrapper
   storage/               # persistent storage (file-based)
   config/                # configuration loading
   mock/                  # mock rds api server for testing
   notifiers/             # slack notifications
-ui/                      # react frontend (built into internal/app/ui/)
+ui/                      # react frontend source code
 docs/                    # additional documentation
 ```
 
