@@ -208,3 +208,11 @@ export interface ClusterProxiesResponse {
   cluster_id: string;
   proxies: ProxyWithTargets[];
 }
+
+// Blue-Green deployment prerequisites check result
+export interface BlueGreenPrerequisites {
+  logical_replication_enabled: boolean;
+  parameter_group_name: string;
+  engine: string;
+  missing_parameter?: string;
+}

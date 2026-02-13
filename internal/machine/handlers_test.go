@@ -211,3 +211,117 @@ func containsAny(s string, substrings ...string) bool {
 	}
 	return false
 }
+
+// TestStepTimingPreservedAcrossRetries verifies that step StartedAt is preserved
+// across retries so that the total duration reflects all time spent on a step,
+// not just the last attempt. This is important for users making scheduling decisions.
+func TestStepTimingPreservedAcrossRetries(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
+
+	engine := &Engine{
+		operations:          make(map[string]*types.Operation),
+		events:              make(map[string][]types.Event),
+		logger:              logger,
+		handlers:            make(map[string]StepHandler),
+		store:               &storage.NullStore{},
+		defaultWaitTimeout:  5 * time.Second,
+		defaultPollInterval: 10 * time.Millisecond,
+	}
+
+	// Register a handler that always fails (to simulate retries)
+	failCount := 0
+	engine.handlers["test_action"] = func(ctx context.Context, op *types.Operation, step *types.Step) error {
+		failCount++
+		if failCount < 3 {
+			return context.DeadlineExceeded // Simulate a retryable error
+		}
+		return nil // Succeed on third attempt
+	}
+
+	op := &types.Operation{
+		ID:        "test-timing-op",
+		Type:      types.OperationTypeInstanceTypeChange,
+		State:     types.StateCreated,
+		ClusterID: "test-cluster",
+		Region:    "us-east-1",
+		Steps: []types.Step{
+			{
+				ID:         "step-1",
+				Name:       "Test step",
+				Action:     "test_action",
+				State:      types.StepStatePending,
+				MaxRetries: 5,
+			},
+		},
+		CreatedAt: time.Now(),
+	}
+
+	engine.operations[op.ID] = op
+
+	// Execute the step - it should fail twice and succeed on third try
+	step := &op.Steps[0]
+
+	// First execution - sets StartedAt
+	originalStartedAt := time.Now()
+	err := engine.executeStep(context.Background(), op, step)
+	if err == nil {
+		t.Fatal("Expected first execution to fail")
+	}
+
+	firstStartedAt := step.StartedAt
+	if firstStartedAt == nil {
+		t.Fatal("StartedAt should be set after first execution")
+	}
+
+	// Verify StartedAt is close to when we started (within 100ms)
+	if firstStartedAt.Sub(originalStartedAt) > 100*time.Millisecond {
+		t.Errorf("StartedAt should be close to execution time, got diff of %v", firstStartedAt.Sub(originalStartedAt))
+	}
+
+	// Small delay to ensure time difference is measurable
+	time.Sleep(50 * time.Millisecond)
+
+	// Second execution (simulating retry) - StartedAt should NOT change
+	step.State = types.StepStatePending // Reset state as retry logic would
+	err = engine.executeStep(context.Background(), op, step)
+	if err == nil {
+		t.Fatal("Expected second execution to fail")
+	}
+
+	secondStartedAt := step.StartedAt
+	if secondStartedAt == nil {
+		t.Fatal("StartedAt should still be set after second execution")
+	}
+
+	// CRITICAL: StartedAt should be preserved (same as first execution)
+	if !secondStartedAt.Equal(*firstStartedAt) {
+		t.Errorf("StartedAt should be preserved across retries.\n  First:  %v\n  Second: %v\n  This would cause inaccurate duration reporting!",
+			firstStartedAt, secondStartedAt)
+	}
+
+	// Small delay before third attempt
+	time.Sleep(50 * time.Millisecond)
+
+	// Third execution - should succeed, StartedAt still preserved
+	step.State = types.StepStatePending
+	err = engine.executeStep(context.Background(), op, step)
+	if err != nil {
+		t.Fatalf("Expected third execution to succeed, got: %v", err)
+	}
+
+	finalStartedAt := step.StartedAt
+	if !finalStartedAt.Equal(*firstStartedAt) {
+		t.Errorf("StartedAt should remain from first attempt even after success.\n  First: %v\n  Final: %v",
+			firstStartedAt, finalStartedAt)
+	}
+
+	// Verify that the elapsed time reflects total time (including retries)
+	// We had ~100ms of delays, so duration should be > 100ms
+	elapsed := time.Since(*finalStartedAt)
+	if elapsed < 100*time.Millisecond {
+		t.Errorf("Duration should reflect total time including retries, got only %v", elapsed)
+	}
+
+	t.Logf("Step timing correctly preserved: StartedAt=%v, elapsed=%v (includes %d retry attempts)",
+		finalStartedAt, elapsed, failCount-1)
+}

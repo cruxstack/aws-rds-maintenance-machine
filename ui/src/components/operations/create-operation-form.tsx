@@ -33,7 +33,18 @@ import type {
   OperationType,
   CreateOperationRequest,
   ProxyWithTargets,
+  BlueGreenPrerequisites,
 } from '@/types';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface CreateOperationFormProps {
   onSubmit: (req: CreateOperationRequest) => Promise<void>;
@@ -59,6 +70,9 @@ export const CreateOperationForm = memo(function CreateOperationForm({
   const [instanceTypes, setInstanceTypes] = useState<InstanceTypeOption[]>([]);
   const [clusterProxies, setClusterProxies] = useState<ProxyWithTargets[]>([]);
   const [isLoadingProxies, setIsLoadingProxies] = useState(false);
+  const [blueGreenPrereqs, setBlueGreenPrereqs] = useState<BlueGreenPrerequisites | null>(null);
+  const [isLoadingPrereqs, setIsLoadingPrereqs] = useState(false);
+  const [showPrereqsAlert, setShowPrereqsAlert] = useState(false);
 
   // Form state
   const [operationType, setOperationType] = useState<OperationType | ''>('');
@@ -186,15 +200,19 @@ export const CreateOperationForm = memo(function CreateOperationForm({
     setClusterProxies([]);
   }, [operationType]);
 
-  // Fetch proxies when engine_upgrade is selected
+  // Fetch proxies and prerequisites when engine_upgrade is selected
   useEffect(() => {
     if (operationType !== 'engine_upgrade' || !selectedCluster || !selectedRegion) {
       setClusterProxies([]);
+      setBlueGreenPrereqs(null);
       return;
     }
 
     let mounted = true;
     setIsLoadingProxies(true);
+    setIsLoadingPrereqs(true);
+
+    // Fetch proxies
     api
       .getClusterProxies(selectedCluster, selectedRegion)
       .then((data) => {
@@ -207,6 +225,19 @@ export const CreateOperationForm = memo(function CreateOperationForm({
         if (mounted) setIsLoadingProxies(false);
       });
 
+    // Fetch Blue-Green prerequisites
+    api
+      .getBlueGreenPrerequisites(selectedCluster, selectedRegion)
+      .then((data) => {
+        if (mounted) setBlueGreenPrereqs(data);
+      })
+      .catch((err) => {
+        if (mounted) console.warn('Failed to check Blue-Green prerequisites:', err.message);
+      })
+      .finally(() => {
+        if (mounted) setIsLoadingPrereqs(false);
+      });
+
     return () => { mounted = false; };
   }, [operationType, selectedCluster, selectedRegion]);
 
@@ -215,6 +246,12 @@ export const CreateOperationForm = memo(function CreateOperationForm({
 
     if (!selectedCluster || !operationType) {
       onError('Please select a cluster and operation type');
+      return;
+    }
+
+    // Check Blue-Green prerequisites for engine upgrade
+    if (operationType === 'engine_upgrade' && blueGreenPrereqs && !blueGreenPrereqs.logical_replication_enabled) {
+      setShowPrereqsAlert(true);
       return;
     }
 
@@ -547,6 +584,38 @@ export const CreateOperationForm = memo(function CreateOperationForm({
                 </Alert>
               )}
 
+              {/* Blue-Green Prerequisites Check */}
+              {isLoadingPrereqs ? (
+                <Alert variant="info">
+                  <AlertTriangle className="h-4 w-4 animate-pulse" />
+                  <AlertDescription>
+                    Checking Blue-Green deployment prerequisites...
+                  </AlertDescription>
+                </Alert>
+              ) : blueGreenPrereqs && !blueGreenPrereqs.logical_replication_enabled ? (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Logical Replication Not Enabled</AlertTitle>
+                  <AlertDescription>
+                    <span className="block mb-2">
+                      Blue-Green Deployments require logical replication to be enabled on the source cluster.
+                    </span>
+                    <div className="text-xs bg-destructive/10 rounded px-2 py-2 space-y-1">
+                      <div>
+                        <span className="font-medium">Parameter Group:</span>{' '}
+                        <code className="bg-muted px-1 rounded">{blueGreenPrereqs.parameter_group_name}</code>
+                      </div>
+                      <div>
+                        <span className="font-medium">Required Setting:</span>{' '}
+                        <code className="bg-muted px-1 rounded">
+                          {blueGreenPrereqs.missing_parameter} = {blueGreenPrereqs.engine.startsWith('aurora-postgresql') ? '1' : 'ROW'}
+                        </code>
+                      </div>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+
               {isLoadingProxies ? (
                 <Alert variant="info">
                   <Network className="h-4 w-4 animate-pulse" />
@@ -782,6 +851,57 @@ export const CreateOperationForm = memo(function CreateOperationForm({
             {isSubmitting ? 'Creating...' : 'Create Operation'}
           </Button>
         </form>
+
+        {/* Alert dialog for missing logical replication prerequisite */}
+        <AlertDialog open={showPrereqsAlert} onOpenChange={setShowPrereqsAlert}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Logical Replication Required</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-3">
+                  <p>
+                    Blue-Green Deployments require logical replication to be enabled on the source cluster.
+                    This cluster's parameter group does not have the required setting.
+                  </p>
+                  {blueGreenPrereqs && (
+                    <div className="bg-muted rounded-md p-3 space-y-2 text-sm">
+                      <div>
+                        <span className="font-medium">Parameter Group:</span>{' '}
+                        <code className="bg-background px-1.5 py-0.5 rounded text-xs">
+                          {blueGreenPrereqs.parameter_group_name}
+                        </code>
+                      </div>
+                      <div>
+                        <span className="font-medium">Required Setting:</span>{' '}
+                        <code className="bg-background px-1.5 py-0.5 rounded text-xs">
+                          {blueGreenPrereqs.missing_parameter} = {blueGreenPrereqs.engine.startsWith('aurora-postgresql') ? '1' : 'ROW'}
+                        </code>
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-xs">
+                    Before creating this operation, associate the cluster with a custom DB cluster parameter group
+                    that has logical replication enabled, then reboot the cluster to apply changes.
+                  </p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  // Open AWS documentation for Blue-Green prerequisites
+                  window.open(
+                    'https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/blue-green-deployments-overview.html#blue-green-deployments-limitations',
+                    '_blank'
+                  );
+                }}
+              >
+                View AWS Documentation
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   );

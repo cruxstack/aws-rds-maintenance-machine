@@ -1221,6 +1221,14 @@ func (e *Engine) handleSwitchoverBlueGreen(ctx context.Context, op *types.Operat
 	// This handles cases where the step is retried after switchover already succeeded
 	bgInfo, err := rdsClient.DescribeBlueGreenDeployment(ctx, deploymentID)
 	if err == nil {
+		// Check switchover_details first - AWS may keep top-level status as AVAILABLE
+		// but set switchover failure/success in the details
+		for _, detail := range bgInfo.SwitchoverDetails {
+			if detail.Status == "SWITCHOVER_FAILED" {
+				return errors.Errorf("switchover previously failed for %s: check RDS events for details (e.g., DDL changes during replication)", detail.SourceMember)
+			}
+		}
+
 		switch bgInfo.Status {
 		case "SWITCHOVER_COMPLETED":
 			e.addEvent(op.ID, "info", "Blue-Green switchover already completed", nil)
@@ -1270,6 +1278,14 @@ waitForCompletion:
 			}
 
 			step.WaitCondition = fmt.Sprintf("switchover status: %s", bgInfo.Status)
+
+			// Check switchover_details for failure status
+			// AWS may keep top-level status as AVAILABLE but set switchover failure in details
+			for _, detail := range bgInfo.SwitchoverDetails {
+				if detail.Status == "SWITCHOVER_FAILED" {
+					return errors.Errorf("switchover failed for %s: check RDS events for details", detail.SourceMember)
+				}
+			}
 
 			switch bgInfo.Status {
 			case "SWITCHOVER_COMPLETED":
@@ -1374,9 +1390,13 @@ func (e *Engine) handleCleanupBlueGreen(ctx context.Context, op *types.Operation
 		e.addEvent(op.ID, "info", fmt.Sprintf("Deleting old instance: %s", oldInstID), nil)
 
 		if err := rdsClient.DeleteInstance(ctx, oldInstID, true); err != nil {
-			// Treat "not found" as success - resource is already gone
-			if strings.Contains(err.Error(), "NotFound") || strings.Contains(err.Error(), "not found") {
+			errStr := err.Error()
+			// Treat "not found" or "already being deleted" as success
+			if strings.Contains(errStr, "NotFound") || strings.Contains(errStr, "not found") {
 				e.addEvent(op.ID, "info", fmt.Sprintf("Old instance %s already deleted or does not exist", oldInstID), nil)
+				deletedInstances = append(deletedInstances, oldInstID)
+			} else if strings.Contains(errStr, "already being deleted") {
+				e.addEvent(op.ID, "info", fmt.Sprintf("Old instance %s is already being deleted", oldInstID), nil)
 				deletedInstances = append(deletedInstances, oldInstID)
 			} else {
 				e.addEvent(op.ID, "warning", fmt.Sprintf("Failed to delete old instance %s: %v", oldInstID, err), nil)
@@ -1400,9 +1420,35 @@ func (e *Engine) handleCleanupBlueGreen(ctx context.Context, op *types.Operation
 		time.Sleep(2 * time.Second)
 
 		if err := rdsClient.DeleteCluster(ctx, oldClusterIDRenamed, true); err != nil {
+			errStr := err.Error()
 			// Treat "not found" as success - resource is already gone
-			if strings.Contains(err.Error(), "NotFound") || strings.Contains(err.Error(), "not found") {
+			if strings.Contains(errStr, "NotFound") || strings.Contains(errStr, "not found") {
 				e.addEvent(op.ID, "info", fmt.Sprintf("Old cluster %s already deleted or does not exist", oldClusterIDRenamed), nil)
+			} else if strings.Contains(errStr, "deletion protection") || strings.Contains(errStr, "Cannot delete protected") {
+				// Disable deletion protection and retry
+				e.addEvent(op.ID, "info", fmt.Sprintf("Disabling deletion protection on old cluster %s", oldClusterIDRenamed), nil)
+				falseVal := false
+				if modErr := rdsClient.ModifyCluster(ctx, rds.ModifyClusterParams{
+					ClusterID:          oldClusterIDRenamed,
+					ApplyImmediately:   true,
+					DeletionProtection: &falseVal,
+				}); modErr != nil {
+					e.addEvent(op.ID, "warning", fmt.Sprintf("Failed to disable deletion protection on %s: %v", oldClusterIDRenamed, modErr), nil)
+					failedDeletes = append(failedDeletes, oldClusterIDRenamed)
+				} else {
+					// Retry delete after disabling protection
+					time.Sleep(2 * time.Second)
+					if retryErr := rdsClient.DeleteCluster(ctx, oldClusterIDRenamed, true); retryErr != nil {
+						if !strings.Contains(retryErr.Error(), "NotFound") && !strings.Contains(retryErr.Error(), "not found") {
+							e.addEvent(op.ID, "warning", fmt.Sprintf("Failed to delete old cluster %s after disabling protection: %v", oldClusterIDRenamed, retryErr), nil)
+							failedDeletes = append(failedDeletes, oldClusterIDRenamed)
+						} else {
+							e.addEvent(op.ID, "info", fmt.Sprintf("Old cluster %s already deleted", oldClusterIDRenamed), nil)
+						}
+					} else {
+						e.addEvent(op.ID, "info", fmt.Sprintf("Old cluster %s deletion initiated", oldClusterIDRenamed), nil)
+					}
+				}
 			} else {
 				e.addEvent(op.ID, "warning", fmt.Sprintf("Failed to delete old cluster %s: %v", oldClusterIDRenamed, err), nil)
 				failedDeletes = append(failedDeletes, oldClusterIDRenamed)
