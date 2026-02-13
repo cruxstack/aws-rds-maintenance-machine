@@ -2,6 +2,17 @@
 <DescribeDBClusterParametersResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
   <DescribeDBClusterParametersResult>
     <Parameters>
+      <Parameter>
+        <ParameterName>rds.logical_replication</ParameterName>
+        <ParameterValue>{{.LogicalReplication}}</ParameterValue>
+        <Description>Enable logical replication for Blue-Green deployments</Description>
+        <Source>{{if eq .LogicalReplication "1"}}user{{else}}engine-default{{end}}</Source>
+        <ApplyType>static</ApplyType>
+        <DataType>boolean</DataType>
+        <AllowedValues>0,1</AllowedValues>
+        <IsModifiable>true</IsModifiable>
+        <ApplyMethod>pending-reboot</ApplyMethod>
+      </Parameter>
     </Parameters>
   </DescribeDBClusterParametersResult>
   <ResponseMetadata>

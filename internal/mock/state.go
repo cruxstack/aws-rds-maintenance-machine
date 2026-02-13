@@ -47,12 +47,14 @@ type State struct {
 
 // MockCluster represents a simulated RDS cluster.
 type MockCluster struct {
-	ID              string
-	Engine          string
-	EngineVersion   string
-	Status          string   // See rds.ClusterStatus for all possible values
-	Members         []string // Instance IDs (order matters: first is typically writer)
-	StatusChangedAt time.Time
+	ID                        string
+	Engine                    string
+	EngineVersion             string
+	Status                    string   // See rds.ClusterStatus for all possible values
+	Members                   []string // Instance IDs (order matters: first is typically writer)
+	StatusChangedAt           time.Time
+	ParameterGroupName        string // Cluster parameter group name (for PG correlation in mock)
+	LogicalReplicationEnabled bool   // Whether rds.logical_replication is enabled (for Blue-Green prereqs)
 }
 
 // MockInstance represents a simulated RDS instance.
@@ -262,14 +264,16 @@ func (s *State) SeedDemoClusters() {
 func (s *State) seedDemoClustersLocked() {
 	now := time.Now()
 
-	// Demo 1: Single instance cluster
+	// Demo 1: Single instance cluster (without logical replication - for testing prereqs alert)
 	s.clusters["demo-single"] = &MockCluster{
-		ID:              "demo-single",
-		Engine:          "aurora-postgresql",
-		EngineVersion:   "15.4",
-		Status:          "available",
-		Members:         []string{"demo-single-writer"},
-		StatusChangedAt: now,
+		ID:                        "demo-single",
+		Engine:                    "aurora-postgresql",
+		EngineVersion:             "15.4",
+		Status:                    "available",
+		Members:                   []string{"demo-single-writer"},
+		StatusChangedAt:           now,
+		ParameterGroupName:        "demo-single-pg",
+		LogicalReplicationEnabled: false, // Intentionally disabled for testing
 	}
 	s.instances["demo-single-writer"] = &MockInstance{
 		ID:                         "demo-single-writer",
@@ -288,12 +292,14 @@ func (s *State) seedDemoClustersLocked() {
 
 	// Demo 2: Multi-instance cluster (1 writer + 2 readers)
 	s.clusters["demo-multi"] = &MockCluster{
-		ID:              "demo-multi",
-		Engine:          "aurora-postgresql",
-		EngineVersion:   "15.4",
-		Status:          "available",
-		Members:         []string{"demo-multi-writer", "demo-multi-reader-1", "demo-multi-reader-2"},
-		StatusChangedAt: now,
+		ID:                        "demo-multi",
+		Engine:                    "aurora-postgresql",
+		EngineVersion:             "15.4",
+		Status:                    "available",
+		Members:                   []string{"demo-multi-writer", "demo-multi-reader-1", "demo-multi-reader-2"},
+		StatusChangedAt:           now,
+		ParameterGroupName:        "demo-multi-pg",
+		LogicalReplicationEnabled: true, // Enabled for Blue-Green deployments
 	}
 	s.instances["demo-multi-writer"] = &MockInstance{
 		ID:                         "demo-multi-writer",
@@ -340,12 +346,14 @@ func (s *State) seedDemoClustersLocked() {
 
 	// Demo 3: Mixed autoscaled cluster (1 writer + 1 TF reader + 2 autoscaled readers)
 	s.clusters["demo-autoscaled"] = &MockCluster{
-		ID:              "demo-autoscaled",
-		Engine:          "aurora-postgresql",
-		EngineVersion:   "15.4",
-		Status:          "available",
-		Members:         []string{"demo-autoscaled-writer", "demo-autoscaled-reader-1", "demo-autoscaled-asg-1", "demo-autoscaled-asg-2"},
-		StatusChangedAt: now,
+		ID:                        "demo-autoscaled",
+		Engine:                    "aurora-postgresql",
+		EngineVersion:             "15.4",
+		Status:                    "available",
+		Members:                   []string{"demo-autoscaled-writer", "demo-autoscaled-reader-1", "demo-autoscaled-asg-1", "demo-autoscaled-asg-2"},
+		StatusChangedAt:           now,
+		ParameterGroupName:        "demo-autoscaled-pg",
+		LogicalReplicationEnabled: true, // Enabled for Blue-Green deployments
 	}
 	s.instances["demo-autoscaled-writer"] = &MockInstance{
 		ID:                         "demo-autoscaled-writer",
@@ -406,12 +414,14 @@ func (s *State) seedDemoClustersLocked() {
 
 	// Demo 4: Cluster ready for engine upgrade (no proxy)
 	s.clusters["demo-upgrade"] = &MockCluster{
-		ID:              "demo-upgrade",
-		Engine:          "aurora-postgresql",
-		EngineVersion:   "15.4",
-		Status:          "available",
-		Members:         []string{"demo-upgrade-writer", "demo-upgrade-reader-1"},
-		StatusChangedAt: now,
+		ID:                        "demo-upgrade",
+		Engine:                    "aurora-postgresql",
+		EngineVersion:             "15.4",
+		Status:                    "available",
+		Members:                   []string{"demo-upgrade-writer", "demo-upgrade-reader-1"},
+		StatusChangedAt:           now,
+		ParameterGroupName:        "demo-upgrade-pg",
+		LogicalReplicationEnabled: true, // Enabled for Blue-Green deployments
 	}
 	s.instances["demo-upgrade-writer"] = &MockInstance{
 		ID:                         "demo-upgrade-writer",
@@ -444,12 +454,14 @@ func (s *State) seedDemoClustersLocked() {
 
 	// Demo 5: Cluster with RDS Proxy (1 writer + 2 readers) - for testing proxy retargeting
 	s.clusters["demo-proxy-cluster"] = &MockCluster{
-		ID:              "demo-proxy-cluster",
-		Engine:          "aurora-postgresql",
-		EngineVersion:   "15.4",
-		Status:          "available",
-		Members:         []string{"demo-proxy-cluster-writer", "demo-proxy-cluster-reader-1", "demo-proxy-cluster-reader-2"},
-		StatusChangedAt: now,
+		ID:                        "demo-proxy-cluster",
+		Engine:                    "aurora-postgresql",
+		EngineVersion:             "15.4",
+		Status:                    "available",
+		Members:                   []string{"demo-proxy-cluster-writer", "demo-proxy-cluster-reader-1", "demo-proxy-cluster-reader-2"},
+		StatusChangedAt:           now,
+		ParameterGroupName:        "demo-proxy-cluster-pg",
+		LogicalReplicationEnabled: true, // Enabled for Blue-Green deployments
 	}
 	s.instances["demo-proxy-cluster-writer"] = &MockInstance{
 		ID:                         "demo-proxy-cluster-writer",

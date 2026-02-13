@@ -367,6 +367,10 @@ func (c *Client) ModifyCluster(ctx context.Context, params ModifyClusterParams) 
 		input.DBInstanceParameterGroupName = aws.String(params.DBInstanceParameterGroupName)
 	}
 
+	if params.DeletionProtection != nil {
+		input.DeletionProtection = params.DeletionProtection
+	}
+
 	_, err := c.rds.ModifyDBCluster(ctx, input)
 	if err != nil {
 		return errors.Wrap(err, "modify cluster")
@@ -383,6 +387,7 @@ type ModifyClusterParams struct {
 	ApplyImmediately             bool
 	DBClusterParameterGroupName  string
 	DBInstanceParameterGroupName string // Required for engine upgrades when instances use custom PG
+	DeletionProtection           *bool  // nil means don't change, true/false explicitly sets it
 }
 
 // CreateClusterSnapshot creates a manual snapshot of the cluster.
@@ -1562,6 +1567,92 @@ func (c *Client) WaitForProxyTargetsAvailable(ctx context.Context, proxyName, ta
 	}
 }
 
+// BlueGreenPrerequisites contains information about prerequisites for Blue-Green deployments.
+type BlueGreenPrerequisites struct {
+	LogicalReplicationEnabled bool   `json:"logical_replication_enabled"`
+	ParameterGroupName        string `json:"parameter_group_name"`
+	Engine                    string `json:"engine"`
+	// MissingParameter is the name of the parameter that needs to be set (for error messages)
+	MissingParameter string `json:"missing_parameter,omitempty"`
+}
+
+// CheckBlueGreenPrerequisites checks if a cluster meets the prerequisites for Blue-Green deployments.
+// For Aurora PostgreSQL, this requires rds.logical_replication = 1.
+// For Aurora MySQL, this requires binlog_format = ROW.
+func (c *Client) CheckBlueGreenPrerequisites(ctx context.Context, clusterID string) (*BlueGreenPrerequisites, error) {
+	// Get cluster info to determine engine type
+	out, err := c.rds.DescribeDBClusters(ctx, &rds.DescribeDBClustersInput{
+		DBClusterIdentifier: aws.String(clusterID),
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "describe cluster")
+	}
+	if len(out.DBClusters) == 0 {
+		return nil, errors.Wrap(internalerrors.ErrClusterNotFound, clusterID)
+	}
+
+	cluster := out.DBClusters[0]
+	engine := aws.ToString(cluster.Engine)
+	pgName := aws.ToString(cluster.DBClusterParameterGroup)
+
+	result := &BlueGreenPrerequisites{
+		ParameterGroupName: pgName,
+		Engine:             engine,
+	}
+
+	// Get all parameters (not just user-modified) to check logical replication
+	// We need to check the effective value, which includes defaults
+	if strings.HasPrefix(engine, "aurora-postgresql") {
+		result.MissingParameter = "rds.logical_replication"
+		enabled, err := c.checkParameterValue(ctx, pgName, "rds.logical_replication", "1")
+		if err != nil {
+			return nil, errors.Wrap(err, "check rds.logical_replication parameter")
+		}
+		result.LogicalReplicationEnabled = enabled
+	} else if strings.HasPrefix(engine, "aurora-mysql") {
+		result.MissingParameter = "binlog_format"
+		enabled, err := c.checkParameterValue(ctx, pgName, "binlog_format", "ROW")
+		if err != nil {
+			return nil, errors.Wrap(err, "check binlog_format parameter")
+		}
+		result.LogicalReplicationEnabled = enabled
+	} else {
+		// For other engines, assume prerequisites are met
+		result.LogicalReplicationEnabled = true
+	}
+
+	if result.LogicalReplicationEnabled {
+		result.MissingParameter = "" // Clear if enabled
+	}
+
+	return result, nil
+}
+
+// checkParameterValue checks if a specific cluster parameter has the expected value.
+func (c *Client) checkParameterValue(ctx context.Context, parameterGroupName, parameterName, expectedValue string) (bool, error) {
+	paginator := rds.NewDescribeDBClusterParametersPaginator(c.rds, &rds.DescribeDBClusterParametersInput{
+		DBClusterParameterGroupName: aws.String(parameterGroupName),
+	})
+
+	for paginator.HasMorePages() {
+		out, err := paginator.NextPage(ctx)
+		if err != nil {
+			return false, errors.Wrap(err, "describe parameters")
+		}
+
+		for _, param := range out.Parameters {
+			if aws.ToString(param.ParameterName) == parameterName {
+				value := aws.ToString(param.ParameterValue)
+				return strings.EqualFold(value, expectedValue), nil
+			}
+		}
+	}
+
+	// Parameter not found in the group, check against default
+	// If not found, it means it's using the engine default which is typically disabled
+	return false, nil
+}
+
 // ValidateProxyHealth checks if a proxy and its targets are healthy.
 // Returns nil if healthy, or an error describing the health issue.
 func (c *Client) ValidateProxyHealth(ctx context.Context, proxyWithTargets ProxyWithTargets) error {
@@ -1594,4 +1685,40 @@ func (c *Client) ValidateProxyHealth(ctx context.Context, proxyWithTargets Proxy
 	}
 
 	return nil
+}
+
+// RDSEvent represents an RDS event.
+type RDSEvent struct {
+	Date          time.Time `json:"date"`
+	SourceID      string    `json:"source_id"`
+	SourceType    string    `json:"source_type"`
+	Message       string    `json:"message"`
+	EventCategory string    `json:"event_category,omitempty"`
+}
+
+// GetRecentClusterEvents returns recent RDS events for a cluster.
+func (c *Client) GetRecentClusterEvents(ctx context.Context, clusterID string, maxEvents int) ([]RDSEvent, error) {
+	out, err := c.rds.DescribeEvents(ctx, &rds.DescribeEventsInput{
+		SourceIdentifier: aws.String(clusterID),
+		SourceType:       types.SourceTypeDbCluster,
+		Duration:         aws.Int32(1440), // Last 24 hours
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "describe events")
+	}
+
+	var events []RDSEvent
+	for _, e := range out.Events {
+		events = append(events, RDSEvent{
+			Date:       aws.ToTime(e.Date),
+			SourceID:   aws.ToString(e.SourceIdentifier),
+			SourceType: string(e.SourceType),
+			Message:    aws.ToString(e.Message),
+		})
+		if len(events) >= maxEvents {
+			break
+		}
+	}
+
+	return events, nil
 }

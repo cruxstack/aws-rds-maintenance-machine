@@ -13,6 +13,7 @@ import type {
   MockTiming,
   MockFault,
   ClusterProxiesResponse,
+  BlueGreenPrerequisites,
 } from '@/types';
 
 const MOCK_ENDPOINT = '/mock';
@@ -135,6 +136,16 @@ export async function getClusterProxies(
     ...data,
     proxies: data.proxies ?? [],
   };
+}
+
+export async function getBlueGreenPrerequisites(
+  clusterId: string,
+  region?: string
+): Promise<BlueGreenPrerequisites> {
+  const headers: Record<string, string> = { 'X-Cluster-Id': clusterId };
+  if (region) headers['X-Region'] = region;
+  const res = await fetch('/api/cluster/blue-green-prerequisites', { headers });
+  return handleResponse(res);
 }
 
 // Operations

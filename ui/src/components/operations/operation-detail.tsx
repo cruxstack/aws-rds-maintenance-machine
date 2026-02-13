@@ -222,6 +222,9 @@ export function OperationDetail({
                     isCurrent={
                       i === currentStepIndex && operation.state === 'running'
                     }
+                    isWaiting={
+                      i === currentStepIndex && operation.state === 'paused'
+                    }
                     isLast={i === steps.length - 1}
                     willPause={(operation.pause_before_steps ?? []).includes(i)}
                     canTogglePause={
@@ -339,6 +342,7 @@ function StepItem({
   step,
   index,
   isCurrent,
+  isWaiting,
   isLast,
   willPause,
   canTogglePause,
@@ -347,6 +351,7 @@ function StepItem({
   step: Step;
   index: number;
   isCurrent: boolean;
+  isWaiting: boolean;
   isLast: boolean;
   willPause: boolean;
   canTogglePause: boolean;
@@ -368,13 +373,16 @@ function StepItem({
             step.state === 'waiting' && 'bg-status-yellow/20 text-status-yellow border border-status-yellow/30',
             step.state === 'skipped' && 'bg-muted text-muted-foreground border border-border',
             step.state === 'pending' && 'bg-secondary text-muted-foreground/60 border border-border/50',
-            isCurrent && 'ring-2 ring-status-blue ring-offset-2 ring-offset-background'
+            isCurrent && 'ring-2 ring-status-blue ring-offset-2 ring-offset-background',
+            isWaiting && 'ring-2 ring-status-yellow ring-offset-2 ring-offset-background'
           )}
         >
           {step.state === 'completed' ? (
             <CheckIcon className="h-3.5 w-3.5" />
           ) : step.state === 'failed' ? (
             <XIcon className="h-3.5 w-3.5" />
+          ) : isWaiting ? (
+            <PauseIcon className="h-3.5 w-3.5" />
           ) : (
             index + 1
           )}
@@ -396,18 +404,30 @@ function StepItem({
           <span
             className={cn(
               'text-sm font-medium truncate',
-              step.state === 'pending' && 'text-muted-foreground'
+              step.state === 'pending' && 'text-muted-foreground',
+              isWaiting && 'text-status-yellow'
             )}
           >
             {step.name}
           </span>
+          {/* Active/Waiting indicator */}
+          {isCurrent && (
+            <span className="text-[10px] text-status-blue bg-status-blue/10 px-1.5 py-0.5 rounded shrink-0 animate-pulse">
+              running
+            </span>
+          )}
+          {isWaiting && (
+            <span className="text-[10px] text-status-yellow bg-status-yellow/10 px-1.5 py-0.5 rounded shrink-0">
+              waiting
+            </span>
+          )}
           {duration && duration !== '-' && (
             <span className="text-[11px] text-muted-foreground/70 tabular-nums shrink-0">
               {duration}
             </span>
           )}
           {/* Auto-pause indicator/toggle */}
-          {willPause && (
+          {willPause && !isWaiting && (
             <span className="text-[10px] text-status-yellow bg-status-yellow/10 px-1.5 py-0.5 rounded shrink-0">
               will pause
             </span>
@@ -475,6 +495,18 @@ function XIcon({ className }: { className?: string }) {
       strokeWidth={3}
     >
       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  );
+}
+
+function PauseIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
     </svg>
   );
 }

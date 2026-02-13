@@ -232,13 +232,17 @@ func (s *Server) handleDescribeDBClusters(w http.ResponseWriter, values url.Valu
 	data := clustersData{Clusters: make([]clusterData, 0, len(clusters))}
 	for _, cluster := range clusters {
 		clusterARN := fmt.Sprintf("arn:aws:rds:us-east-1:123456789012:cluster:%s", cluster.ID)
+		pgName := cluster.ParameterGroupName
+		if pgName == "" {
+			pgName = "default.aurora-postgresql15"
+		}
 		cd := clusterData{
 			ID:             cluster.ID,
 			ARN:            clusterARN,
 			Engine:         cluster.Engine,
 			EngineVersion:  cluster.EngineVersion,
 			Status:         cluster.Status,
-			ParameterGroup: "default.aurora-postgresql15",
+			ParameterGroup: pgName,
 			Members:        make([]clusterMemberData, 0),
 		}
 		for _, memberID := range cluster.Members {
@@ -597,7 +601,25 @@ func (s *Server) handleDescribeDBClusterParameterGroups(w http.ResponseWriter, v
 }
 
 func (s *Server) handleDescribeDBClusterParameters(w http.ResponseWriter, values url.Values) {
-	s.executeTemplate(w, "describe_db_cluster_parameters.xml", nil)
+	pgName := values.Get("DBClusterParameterGroupName")
+
+	// Determine logical replication value by finding the cluster that owns this parameter group
+	logicalReplication := "0"
+	if pgName != "" {
+		for _, cluster := range s.state.ListClusters() {
+			if cluster.ParameterGroupName == pgName && cluster.LogicalReplicationEnabled {
+				logicalReplication = "1"
+				break
+			}
+		}
+	}
+
+	data := struct {
+		LogicalReplication string
+	}{
+		LogicalReplication: logicalReplication,
+	}
+	s.executeTemplate(w, "describe_db_cluster_parameters.xml", data)
 }
 
 func (s *Server) handleCreateDBClusterParameterGroup(w http.ResponseWriter, values url.Values) {

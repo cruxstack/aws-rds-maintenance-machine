@@ -583,6 +583,8 @@ func (e *Engine) executeSteps(ctx context.Context, op *types.Operation) {
 		e.mu.Lock()
 		if err != nil {
 			if errors.Is(err, internalerrors.ErrInterventionRequired) {
+				step.State = types.StepStateWaiting
+				step.WaitCondition = "waiting for operator intervention"
 				op.State = types.StatePaused
 				op.PauseReason = step.Error
 				op.UpdatedAt = time.Now()
@@ -659,8 +661,12 @@ func (e *Engine) executeSteps(ctx context.Context, op *types.Operation) {
 func (e *Engine) executeStep(ctx context.Context, op *types.Operation, step *types.Step) error {
 	e.mu.Lock()
 	step.State = types.StepStateInProgress
-	now := time.Now()
-	step.StartedAt = &now
+	// Only set StartedAt if not already set - preserves original start time across retries
+	// so duration reflects total time spent on this step (including failed attempts)
+	if step.StartedAt == nil {
+		now := time.Now()
+		step.StartedAt = &now
+	}
 	e.mu.Unlock()
 
 	e.persistOperation(ctx, op)

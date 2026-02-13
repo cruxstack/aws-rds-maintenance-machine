@@ -129,6 +129,10 @@ func (a *App) handleHTTPRequest(ctx context.Context, req Request) Response {
 		return a.handleGetInstanceTypes(ctx, req)
 	case path == "/api/cluster/proxies" && req.Method == "GET":
 		return a.handleGetClusterProxies(ctx, req)
+	case path == "/api/cluster/blue-green-prerequisites" && req.Method == "GET":
+		return a.handleGetBlueGreenPrerequisites(ctx, req)
+	case path == "/api/cluster/events" && req.Method == "GET":
+		return a.handleGetClusterEvents(ctx, req)
 	case path == "/api/config" && req.Method == "GET":
 		return a.handlePublicConfig()
 	case strings.HasPrefix(path, "/mock/"):
@@ -479,6 +483,59 @@ func (a *App) handleGetUpgradeTargets(ctx context.Context, req Request) Response
 	}
 
 	return jsonResponse(200, response)
+}
+
+// handleGetClusterEvents returns recent RDS events for a cluster (for debugging).
+func (a *App) handleGetClusterEvents(ctx context.Context, req Request) Response {
+	clusterID := req.Headers["x-cluster-id"]
+	region := req.Headers["x-region"]
+
+	if clusterID == "" {
+		return errorResponse(400, "missing x-cluster-id header")
+	}
+	if region == "" {
+		region = a.Config.AWSRegion
+	}
+
+	client, err := a.ClientManager.GetClient(ctx, region)
+	if err != nil {
+		return errorResponse(500, err.Error())
+	}
+
+	events, err := client.GetRecentClusterEvents(ctx, clusterID, 50)
+	if err != nil {
+		return errorResponse(500, err.Error())
+	}
+
+	return jsonResponse(200, map[string]any{
+		"cluster_id": clusterID,
+		"events":     events,
+	})
+}
+
+// handleGetBlueGreenPrerequisites checks if a cluster meets Blue-Green deployment prerequisites.
+func (a *App) handleGetBlueGreenPrerequisites(ctx context.Context, req Request) Response {
+	clusterID := req.Headers["x-cluster-id"]
+	region := req.Headers["x-region"]
+
+	if clusterID == "" {
+		return errorResponse(400, "missing x-cluster-id header")
+	}
+	if region == "" {
+		region = a.Config.AWSRegion
+	}
+
+	client, err := a.ClientManager.GetClient(ctx, region)
+	if err != nil {
+		return errorResponse(500, err.Error())
+	}
+
+	prereqs, err := client.CheckBlueGreenPrerequisites(ctx, clusterID)
+	if err != nil {
+		return errorResponse(500, err.Error())
+	}
+
+	return jsonResponse(200, prereqs)
 }
 
 // handleGetClusterProxies returns RDS Proxies targeting a cluster.
