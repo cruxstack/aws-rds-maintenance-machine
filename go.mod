@@ -1,6 +1,6 @@
 module github.com/mpz/devops/tools/rds-maint-machine
 
-go 1.24
+go 1.25
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.41.1
@@ -10,7 +10,7 @@ require (
 	github.com/cockroachdb/errors v1.12.0
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
-	github.com/slack-go/slack v0.17.3
+	github.com/slack-go/slack v0.18.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
